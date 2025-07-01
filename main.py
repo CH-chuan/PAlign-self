@@ -356,7 +356,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="mode")
     parser.add_argument("--modes", default='PAS', help="Name of the user to greet")
-    parser.add_argument("--model_file", default='/zhuminjun/model/Meta-Llama-3-8B-hf', help="Name of the user to greet")
+    parser.add_argument("--model_file", default='meta-llama/Meta-Llama-3-8B-Instruct', help="Name of the user to greet")
     args = parser.parse_args()
 
     model_file = args.model_file
