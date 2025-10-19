@@ -81,10 +81,15 @@ def getItems(filename):
         and then divide the remaining 180 questions into a section that we ask the model to predict.
     IPIP-NEO-ItemKey.xls:  This is where we store the question text corresponding to each question ID (the original data only contains the ID part).
     """
-    with open(filename + '/Test-set.json', 'r', encoding='utf-8') as f:
-        data = json.load(f)
+    # with open(filename + '/Test-set.json', 'r', encoding='utf-8') as f:
+    #     data = json.load(f)
+    data = pd.read_csv(filename + '/Dev-set.csv')
     with open(filename + '/mpi_300_split.json', encoding='utf-8') as f:
+        # this is the split of questions for training and testing questions, not subjects
         split_data = json.load(f)
+    # if data is list of json objects, convert to df
+    if isinstance(data, list):
+        data = pd.DataFrame(data)
     return data, pd.read_excel(filename + '/IPIP-NEO-ItemKey.xls'), split_data['train_index'], split_data['test_index']
 
 
@@ -130,7 +135,9 @@ def from_index_to_data(train_index, test_index, text_file, dataset, dataset_set)
     Convert indexed data to structured format.
     """
     data = []
-    for i in tqdm(dataset):
+    # dataset is a dataframe
+    for index, row in tqdm(dataset.iterrows()):
+        i = row.to_dict()
         d_train = []
         d_test = []
         for t_i in train_index:
