@@ -8,7 +8,7 @@ from tqdm import tqdm, trange
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import re
 from pprint import pprint
-from PAlign.llama_pas import get_model
+from PAlign.pas import get_model
 from copy import deepcopy
 from baseline_utils import process_answers, process_few_shot, calc_mean_and_var, process_personality_prompt
 
@@ -48,7 +48,7 @@ def prompt_to_tokens(tokenizer, system_prompt, instruction, model_output, model_
     """
     Convert prompts to tokens based on the model type.
     """
-    if 'llama-3' in model_file.lower():
+    if 'llama-3' in model_file.lower() or 'qwen3' in model_file.lower():
         if model_output:
             con = [
                 {"role": "system", "content": system_prompt},
@@ -81,9 +81,9 @@ def getItems(filename):
         and then divide the remaining 180 questions into a section that we ask the model to predict.
     IPIP-NEO-ItemKey.xls:  This is where we store the question text corresponding to each question ID (the original data only contains the ID part).
     """
-    # with open(filename + '/Test-set.json', 'r', encoding='utf-8') as f:
-    #     data = json.load(f)
-    data = pd.read_csv(filename + '/Dev-set.csv')
+    with open(filename + '/Test-set.json', 'r', encoding='utf-8') as f:
+        data = json.load(f)
+    # data = pd.read_csv(filename + '/Dev-set.csv')
     with open(filename + '/mpi_300_split.json', encoding='utf-8') as f:
         # this is the split of questions for training and testing questions, not subjects
         split_data = json.load(f)
@@ -111,6 +111,9 @@ def generateAnswer(tokenizer, model, dataset, template, scores=SCORES, system_pr
             output_text = tokenizer.batch_decode(outputs)
             if 'llama-3' in model_file.lower():
                 answer = [text.split("<|end_header_id|>")[3] for text in output_text]
+            elif 'qwen3' in model_file.lower():
+                # Qwen3 uses <|im_start|> and <|im_end|> markers
+                answer = [text.split("assistant\n")[-1].split("<|im_end|>")[0] if "assistant\n" in text else text.split("[/INST]")[-1] for text in output_text]
             else:
                 answer = [text.split("[/INST]")[-1] for text in output_text]
             answers.extend(answer)
@@ -370,7 +373,7 @@ if __name__ == "__main__":
     modes = [args.modes]
 
     model, tokenizer = get_model(model_file)
-    if 'llama-3' in model_file.lower():
+    if 'llama-3' in model_file.lower() or 'qwen3' in model_file.lower():
         tokenizer.pad_token = tokenizer.eos_token
         tokenizer.padding_side = 'left'
 

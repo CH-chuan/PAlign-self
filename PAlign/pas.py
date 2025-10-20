@@ -60,6 +60,8 @@ def get_model(model_name='meta-llama/Llama-2-7b-chat-hf', use_bit_4=False, adapt
                 from PAlign.modeling_mistral import MistralForCausalLM as ModelForCausalLM
             elif self.config.architectures[0] == 'LlamaForCausalLM':
                 from PAlign.modeling_llama import LlamaForCausalLM as ModelForCausalLM
+            elif self.config.architectures[0] == 'Qwen3ForCausalLM':
+                from PAlign.modeling_qwen3 import Qwen3ForCausalLM as ModelForCausalLM
             else:
                 print('PAS not implemented yet for {}.'.format(self.config.architectures[0]))
 
@@ -327,7 +329,7 @@ def get_model(model_name='meta-llama/Llama-2-7b-chat-hf', use_bit_4=False, adapt
             self.system_prompt = system_prompt
 
             def prompt_to_tokens(tokenizer, system_prompt, instruction, model_output):
-                if 'llama-3' in self.model_file.lower():
+                if 'llama-3' in self.model_file.lower() or 'qwen3' in self.model_file.lower():
                     if model_output:
                         con = [
                             {"role": "system", "content": system_prompt},
