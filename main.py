@@ -11,6 +11,7 @@ from pprint import pprint
 from PAlign.pas import get_model
 from copy import deepcopy
 from baseline_utils import process_answers, process_few_shot, calc_mean_and_var, process_personality_prompt
+import pickle
 
 device = torch.device("cuda:0") if torch.cuda.is_available() else "cpu"
 global_result = {}
@@ -204,6 +205,10 @@ def process_pas(data, model, tokenizer, model_file):
     :param model_file: Path to the model file
     :return: List of results for each personality sample
     """
+    # Create directories for saving interventions
+    os.makedirs('./interventions', exist_ok=True)
+    os.makedirs('./log', exist_ok=True)
+    
     # Prepare personal data for activation
     personal_data = []
     for personal in ['A', 'C', 'E', 'N', 'O']:
@@ -219,6 +224,8 @@ def process_pas(data, model, tokenizer, model_file):
     all_head_wise_activations = model.preprocess_activate_dataset(personal_data)
 
     results = []
+    all_interventions = []  # Store all intervention data for aggregated save
+    
     for index, sample in enumerate(tqdm(data)):
         model.reset_all()
 
@@ -246,6 +253,22 @@ def process_pas(data, model, tokenizer, model_file):
 
         # Get activations for intervention
         activate = model.get_activations(deepcopy(head_wise_activations), labels, num_to_intervene=24)
+        
+        # Prepare intervention data structure for saving
+        intervention_data = {
+            'sample_id': sample['test'][0]['case'],
+            'sample_index': index,
+            'activate': activate,
+            'labels': labels,
+            'personality_scores': {
+                'A': next((it['value'] for it in sample['train'] if it['label_ocean'] == 'A'), None),
+                'C': next((it['value'] for it in sample['train'] if it['label_ocean'] == 'C'), None),
+                'E': next((it['value'] for it in sample['train'] if it['label_ocean'] == 'E'), None),
+                'N': next((it['value'] for it in sample['train'] if it['label_ocean'] == 'N'), None),
+                'O': next((it['value'] for it in sample['train'] if it['label_ocean'] == 'O'), None),
+            },
+            'system_prompt': system_prompt_text,
+        }
 
         # Test different activation levels
         result_cache = []
@@ -261,14 +284,55 @@ def process_pas(data, model, tokenizer, model_file):
 
         # Select the best result based on mean absolute error
         scores = []
+        alpha_values = [0, 1, 2, 4, 6, 8]
         for p in result_cache:
             score = sum([k[1] for k in p['mean_ver_abs']['mean']])
             if str(score) == 'nan':
                 score = 1e6
             scores.append(score)
-        rs = result_cache[np.array(scores).argmin()]
-        rs['alpha'] = result_cache[np.array(scores).argmin()]
+        
+        best_idx = np.array(scores).argmin()
+        best_alpha = alpha_values[best_idx]
+        rs = result_cache[best_idx]
+        rs['alpha'] = best_alpha
         results.append(rs)
+        
+        # Save intervention parameters with best alpha
+        intervention_data['best_alpha'] = best_alpha
+        intervention_data['alpha_scores'] = scores
+        intervention_data['all_alpha_values'] = alpha_values
+        
+        # Save to individual file
+        model_name = model_file.split("/")[-1]
+        intervention_file = f'./interventions/PAS_{model_name}_sample{index}.pkl'
+        with open(intervention_file, 'wb') as f:
+            pickle.dump(intervention_data, f)
+        
+        print(f"✅ Saved intervention for sample {index}: alpha={best_alpha}, MAE={scores[best_idx]:.4f}")
+        print(f"   File: {intervention_file}")
+        
+        # Store in aggregated list
+        all_interventions.append(intervention_data)
+    
+    # Save aggregated interventions file
+    model_name = model_file.split("/")[-1]
+    aggregated_file = f'./interventions/PAS_{model_name}_all.pkl'
+    aggregated_data = {
+        'interventions': all_interventions,
+        'model_file': model_file,
+        'num_samples': len(data),
+        'model_config': {
+            'num_layers': model.model.model.config.num_hidden_layers,
+            'num_heads': model.model.model.config.num_attention_heads,
+            'hidden_size': model.model.model.config.hidden_size,
+        }
+    }
+    with open(aggregated_file, 'wb') as f:
+        pickle.dump(aggregated_data, f)
+    
+    print(f"\n{'='*70}")
+    print(f"✅ Saved all {len(all_interventions)} interventions to: {aggregated_file}")
+    print(f"{'='*70}\n")
 
     return results
 
