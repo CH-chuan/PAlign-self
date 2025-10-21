@@ -14,6 +14,28 @@ In the evolving landscape of AI, personality alignment stands as a pivotal advan
 - **Benchmarking**: Compare the performance of PASO against state-of-the-art methods like DPO, PPO, and various prompt-based techniques.
 - **Open-Ended Generation**: Assess model performance on complex reasoning and personalized response tasks.
 
+## 🆕 New Features & Extensions
+
+We've recently added several new capabilities to make PAS more flexible and production-ready:
+
+### 1. Extended Model Support
+PAS now supports **Qwen3** and other architectures beyond Llama and Mistral. Learn how to add support for new models:
+- 📖 **[Adding New Models Guide](new_function_docs/ADDING_NEW_MODELS.md)** - Step-by-step guide using Qwen3 as example
+
+### 2. Intervention Parameter Storage
+All computed PAS interventions are now automatically saved for reuse, analysis, and deployment:
+- 📖 **[Intervention Storage Guide](new_function_docs/INTERVENTION_STORAGE.md)** - Complete documentation on saved parameters
+
+### 3. vLLM Deployment
+Package PAS-intervened models into standard HuggingFace format for direct vLLM serving:
+- 📖 **[vLLM Deployment Guide](new_function_docs/VLLM_DEPLOYMENT.md)** - Production deployment with baked interventions
+
+These features enable:
+- ✅ Sample-specific personality alignment (300+ unique personality profiles)
+- ✅ Production-ready serving with `vllm serve model-dir`
+- ✅ Multi-agent workflows with different personality variants
+- ✅ Easy extension to new model architectures
+
 ## Installation
 
 
