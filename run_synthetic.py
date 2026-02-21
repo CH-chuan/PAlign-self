@@ -21,9 +21,10 @@ Arguments:
     --model_file   HuggingFace model name.
                    Default: meta-llama/Meta-Llama-3-8B-Instruct
     --alphas       Comma-separated alpha (steering strength) values to test.
-                   Default: 0,1,2,4,6,8
+                   Default: 0,1,2,4,6,8,12,16
     --output_dir   Directory for JSON result files.
                    Default: ./synthetic_HL
+    --max_new_tokens  Max new tokens for generation. Default: 50
 
 Examples:
     # Steer Conscientiousness high (basic run, ~7 min):
@@ -51,6 +52,7 @@ Interpreting results:
 """
 
 import json
+import logging
 import os
 import argparse
 import torch
@@ -59,10 +61,46 @@ from datetime import datetime
 from copy import deepcopy
 
 from PAlign.pas import get_model
-from main import getItems, from_index_to_data, TEMPLATE, SCORES_BACK, generateAnswer
+from main import getItems, from_index_to_data, TEMPLATE, SCORES_BACK, SYSTEM_PROMPT, prompt_to_tokens
 from baseline_utils import process_answers
 
 TRAITS = ['A', 'C', 'E', 'N', 'O']
+
+
+def setup_raw_logger(output_dir):
+    """Set up a dedicated file logger for raw model generations."""
+    os.makedirs(output_dir, exist_ok=True)
+    raw_logger = logging.getLogger('synthetic_raw_generations')
+    raw_logger.setLevel(logging.INFO)
+    if not raw_logger.handlers:
+        fh = logging.FileHandler(os.path.join(output_dir, 'raw_generations.log'), mode='a')
+        fh.setFormatter(logging.Formatter('[%(asctime)s] %(message)s', datefmt='%Y-%m-%dT%H:%M:%S'))
+        raw_logger.addHandler(fh)
+    return raw_logger
+
+
+def generateAnswer(tokenizer, model, dataset, template, scores=None, system_prompt=SYSTEM_PROMPT,
+                   model_file=None, max_new_tokens=50):
+    """Generate answers using the model, with configurable max_new_tokens."""
+    batch_size = 3
+    questions = [item["text"].lower() for item in dataset]
+    answers = []
+
+    for batch in range(0, len(questions), batch_size):
+        with torch.no_grad():
+            outputs = model.generate(
+                [prompt_to_tokens(tokenizer, system_prompt, template.format(prompt), 'Option', model_file)
+                 for prompt in questions[batch:batch + batch_size]],
+                max_new_tokens=max_new_tokens,
+            )
+            output_text = tokenizer.batch_decode(outputs)
+            if 'llama-3' in model_file.lower():
+                answer = [text.split("<|end_header_id|>")[-1] for text in output_text]
+            else:
+                answer = [text.split("[/INST]")[-1] for text in output_text]
+            answers.extend(answer)
+
+    return answers
 
 
 def build_synthetic_subject(data_0, target_trait, direction):
@@ -86,8 +124,10 @@ def build_synthetic_subject(data_0, target_trait, direction):
     return synthetic
 
 
-def run_single_subject_pas(data_0, synthetic, model, tokenizer, model_file, alpha_values):
+def run_single_subject_pas(data_0, synthetic, model, tokenizer, model_file, alpha_values,
+                           output_dir, target_trait, direction, max_new_tokens=50):
     """Run PAS on a single synthetic subject. Mirrors process_pas single-subject logic."""
+    raw_logger = setup_raw_logger(output_dir)
 
     # Build personal_data from data_0['train'] (shared activations)
     personal_data = []
@@ -147,7 +187,13 @@ def run_single_subject_pas(data_0, synthetic, model, tokenizer, model_file, alph
 
         print(f"  Generating answers for alpha={alpha}...")
         answers = generateAnswer(tokenizer, model, data_0['test'], TEMPLATE,
-                                 system_prompt=system_prompt_text, model_file=model_file)
+                                 system_prompt=system_prompt_text, model_file=model_file,
+                                 max_new_tokens=max_new_tokens)
+
+        raw_logger.info(f"=== trait={target_trait} direction={direction} alpha={alpha} ===")
+        for q_idx, ans in enumerate(answers):
+            raw_logger.info(f"q={q_idx} | {ans.strip()}")
+
         result = process_answers(answers, synthetic)
         result_cache.append(result)
 
@@ -206,10 +252,12 @@ def main():
                         help="Steering direction (high or low)")
     parser.add_argument("--model_file", default='meta-llama/Meta-Llama-3-8B-Instruct',
                         help="HuggingFace model name")
-    parser.add_argument("--alphas", default='0,1,2,4,6,8',
+    parser.add_argument("--alphas", default='0,1,2,4,6,8,12,16',
                         help="Comma-separated alpha values")
     parser.add_argument("--output_dir", default='./synthetic_HL',
                         help="Output directory")
+    parser.add_argument("--max_new_tokens", type=int, default=50,
+                        help="Max new tokens for generation (default: 50)")
     args = parser.parse_args()
 
     alpha_values = [int(x) for x in args.alphas.split(',')]
@@ -238,7 +286,9 @@ def main():
 
     # Run PAS
     result_cache = run_single_subject_pas(data_0, synthetic, model, tokenizer,
-                                          args.model_file, alpha_values)
+                                          args.model_file, alpha_values,
+                                          args.output_dir, args.trait, args.direction,
+                                          args.max_new_tokens)
 
     # Report
     best_idx = print_report(result_cache, alpha_values, args.trait, args.direction)
