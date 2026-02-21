@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Papers (large binaries)
+papers/
+
+# Reproduction outputs (generated data)
+reproduction/subject_results/
+reproduction/raw_generations.log
+reproduction/pas_progress.jsonl
+reproduction/full_run.log
+reproduction/scatter_comparison.png
+reproduction/PAS_*_OOD.json
+
+# Synthetic experiment outputs
+synthetic_HL/
+
+# General
+*.log
+.env
