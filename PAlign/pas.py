@@ -334,7 +334,7 @@ def get_model(model_name='meta-llama/Llama-2-7b-chat-hf', use_bit_4=False, adapt
                             {"role": "user", "content": instruction},
                             {"role": "assistant", "content": model_output}
                         ]
-                        return torch.tensor(tokenizer.apply_chat_template(con)[:-5]).unsqueeze(0)
+                        return torch.tensor(tokenizer.apply_chat_template(con)[:-1]).unsqueeze(0)
                     else:
                         con = [
                             {"role": "system", "content": system_prompt},
