@@ -327,7 +327,7 @@ def get_model(model_name='meta-llama/Llama-2-7b-chat-hf', use_bit_4=False, adapt
             self.system_prompt = system_prompt
 
             def prompt_to_tokens(tokenizer, system_prompt, instruction, model_output):
-                if 'llama-3' in self.model_file.lower():
+                if 'llama-3' in self.model_file.lower() or 'qwen' in self.model_file.lower() or 'gpt-oss' in self.model_file.lower():
                     if model_output:
                         con = [
                             {"role": "system", "content": system_prompt},
@@ -341,7 +341,7 @@ def get_model(model_name='meta-llama/Llama-2-7b-chat-hf', use_bit_4=False, adapt
                             {"role": "user", "content": instruction},
                         ]
                         return torch.tensor(tokenizer.apply_chat_template(con)).unsqueeze(0)
-                else:
+                else:  # Mistral/Devstral [INST] format
                     B_INST, E_INST = "[INST]", "[/INST]"
                     B_SYS, E_SYS = "<<SYS>>\n", "\n<</SYS>>\n\n"
                     dialog_content = B_SYS + system_prompt + E_SYS + instruction.strip()

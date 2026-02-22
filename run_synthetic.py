@@ -96,7 +96,9 @@ def generateAnswer(tokenizer, model, dataset, template, scores=None, system_prom
             output_text = tokenizer.batch_decode(outputs)
             if 'llama-3' in model_file.lower():
                 answer = [text.split("<|end_header_id|>")[-1] for text in output_text]
-            else:
+            elif 'qwen' in model_file.lower() or 'gpt-oss' in model_file.lower():
+                answer = [text.split("<|im_start|>assistant\n")[-1] for text in output_text]
+            else:  # Mistral/Devstral [/INST] format
                 answer = [text.split("[/INST]")[-1] for text in output_text]
             answers.extend(answer)
 
@@ -266,9 +268,9 @@ def main():
     # Load model
     print(f"Loading model: {args.model_file}")
     model, tokenizer = get_model(args.model_file)
-    if 'llama-3' in args.model_file.lower():
+    if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
-        tokenizer.padding_side = 'left'
+    tokenizer.padding_side = 'left'
 
     # Load data (process 1 real subject for shared activations and question text)
     print("Loading PAPI data...")

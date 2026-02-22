@@ -50,8 +50,9 @@ Options:
 def prompt_to_tokens(tokenizer, system_prompt, instruction, model_output, model_file):
     """
     Convert prompts to tokens based on the model type.
+    Supports Llama-3, Qwen/GPT-OSS (ChatML), and Mistral/Devstral ([INST]) formats.
     """
-    if 'llama-3' in model_file.lower():
+    if 'llama-3' in model_file.lower() or 'qwen' in model_file.lower() or 'gpt-oss' in model_file.lower():
         if model_output:
             con = [
                 {"role": "system", "content": system_prompt},
@@ -65,7 +66,7 @@ def prompt_to_tokens(tokenizer, system_prompt, instruction, model_output, model_
                 {"role": "user", "content": instruction},
             ]
             return tokenizer.apply_chat_template(con)
-    else:
+    else:  # Mistral/Devstral [INST] format
         B_INST, E_INST = "[INST]", "[/INST]"
         B_SYS, E_SYS = "<<SYS>>\n", "\n<</SYS>>\n\n"
         dialog_content = B_SYS + system_prompt + E_SYS + instruction.strip()
@@ -109,7 +110,9 @@ def generateAnswer(tokenizer, model, dataset, template, scores=SCORES, system_pr
             output_text = tokenizer.batch_decode(outputs)
             if 'llama-3' in model_file.lower():
                 answer = [text.split("<|end_header_id|>")[-1] for text in output_text]
-            else:
+            elif 'qwen' in model_file.lower() or 'gpt-oss' in model_file.lower():
+                answer = [text.split("<|im_start|>assistant\n")[-1] for text in output_text]
+            else:  # Mistral/Devstral [/INST] format
                 answer = [text.split("[/INST]")[-1] for text in output_text]
             answers.extend(answer)
 
@@ -438,9 +441,9 @@ if __name__ == "__main__":
     num_subjects = args.num_subjects
 
     model, tokenizer = get_model(model_file)
-    if 'llama-3' in model_file.lower():
+    if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
-        tokenizer.padding_side = 'left'
+    tokenizer.padding_side = 'left'
 
     for mode in modes:
         main(mode=mode, model_file=model_file, model=model, tokenizer=tokenizer,
