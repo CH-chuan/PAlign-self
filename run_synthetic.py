@@ -11,7 +11,7 @@ agree) and negative-keyed C items to 1 (strongly disagree), so the probes learn
 to steer toward high Conscientiousness specifically.
 
 Requires:
-    - conda env: palign_repro  (with torch, transformers, einops, baukit, etc.)
+    - conda env: palign_repro  (with torch, transformers, einops, etc.)
     - GPU with >= 24 GB VRAM (model uses ~20.5 GB)
     - PAPI/ data directory in the project root
 

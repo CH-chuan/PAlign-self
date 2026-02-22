@@ -28,7 +28,7 @@ pip install torch torchvision torchaudio --index-url https://download.pytorch.or
 pip install "transformers>=4.46.0" accelerate
 
 # PAlign-specific dependencies
-pip install einops baukit scikit-learn pandas openpyxl tqdm rich
+pip install einops scikit-learn pandas openpyxl tqdm rich
 
 # Additional utilities
 pip install datasets matplotlib numpy

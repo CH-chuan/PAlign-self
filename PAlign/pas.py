@@ -28,9 +28,35 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
 from tqdm.rich import tqdm
 import matplotlib
-from baukit import Trace, TraceDict
-
 from copy import deepcopy
+
+
+class _ModuleOutputCapture:
+    """Capture forward-pass outputs of named submodules."""
+
+    def __init__(self, model, layer_names):
+        self._handles = []
+        self._outputs = {}
+        modules = dict(model.named_modules())
+        for name in layer_names:
+            handle = modules[name].register_forward_hook(self._make_hook(name))
+            self._handles.append(handle)
+
+    def _make_hook(self, name):
+        def hook(module, input, output):
+            self._outputs[name] = output
+        return hook
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        for h in reversed(self._handles):
+            h.remove()
+        self._handles.clear()
+
+    def __getitem__(self, name):
+        return self._outputs[name]
 
 def get_model(model_name='meta-llama/Llama-2-7b-chat-hf', use_bit_4=False, adapter=None):
     """
@@ -365,20 +391,17 @@ def get_model(model_name='meta-llama/Llama-2-7b-chat-hf', use_bit_4=False, adapt
 
             def get_llama_activations_bau(model, prompt):
                 HEADS = [f"model.layers.{i}.self_attn.head_out" for i in range(model.config.num_hidden_layers)]
-                MLPS = [f"model.layers.{i}.mlp" for i in range(model.config.num_hidden_layers)]
 
                 with torch.no_grad():
                     prompt = prompt.to(model.device)
-                    with TraceDict(model, HEADS + MLPS) as ret:
+                    with _ModuleOutputCapture(model, HEADS) as ret:
                         output = model(prompt, output_hidden_states=True)
                     hidden_states = output.hidden_states
                     hidden_states = torch.stack(hidden_states, dim=0).squeeze().to(torch.float16).detach().cpu().numpy()
-                    head_wise_hidden_states = [ret[head].output.squeeze().to(torch.float16).detach().cpu() for head in HEADS]
+                    head_wise_hidden_states = [ret[head].squeeze().to(torch.float16).detach().cpu() for head in HEADS]
                     head_wise_hidden_states = torch.stack(head_wise_hidden_states, dim=0).squeeze().numpy()
-                    mlp_wise_hidden_states = [ret[mlp].output.squeeze().to(torch.float16).detach().cpu() for mlp in MLPS]
-                    mlp_wise_hidden_states = torch.stack(mlp_wise_hidden_states, dim=0).squeeze().numpy()
 
-                return hidden_states, head_wise_hidden_states, mlp_wise_hidden_states
+                return hidden_states, head_wise_hidden_states
 
             prompts = data_preprocess(dataset)
 
@@ -386,7 +409,7 @@ def get_model(model_name='meta-llama/Llama-2-7b-chat-hf', use_bit_4=False, adapt
             all_head_wise_activations = []
 
             for prompt in tqdm(prompts):
-                layer_wise_activation, head_wise_activation, _ = get_llama_activations_bau(self.model, prompt)
+                layer_wise_activation, head_wise_activation = get_llama_activations_bau(self.model, prompt)
                 all_layer_wise_activations.append(layer_wise_activation[:, -1, :])
                 all_head_wise_activations.append(head_wise_activation[:, -1, :])
 
