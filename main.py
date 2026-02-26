@@ -91,7 +91,7 @@ def getItems(filename):
     return data, pd.read_excel(filename + '/IPIP-NEO-ItemKey.xls'), split_data['train_index'], split_data['test_index']
 
 
-def generateAnswer(tokenizer, model, dataset, template, scores=SCORES, system_prompt=SYSTEM_PROMPT, model_file=None):
+def generateAnswer(tokenizer, model, dataset, template, scores=SCORES, system_prompt=SYSTEM_PROMPT, model_file=None, raw_logger=None):
     """
     Generate answers using the model.
     """
@@ -102,7 +102,7 @@ def generateAnswer(tokenizer, model, dataset, template, scores=SCORES, system_pr
     for batch in range(0, len(questions), batch_size):
         with torch.no_grad():
             outputs = model.generate(
-                [prompt_to_tokens(tokenizer, system_prompt, template.format(prompt), 'Option', model_file)
+                [prompt_to_tokens(tokenizer, system_prompt, template.format(prompt), 'Option', model_file) # force first output to be Option
                  for prompt in questions[batch:batch + batch_size]],
                 max_new_tokens=15,
             )
@@ -111,6 +111,9 @@ def generateAnswer(tokenizer, model, dataset, template, scores=SCORES, system_pr
                 answer = [text.split("<|end_header_id|>")[-1] for text in output_text]
             else:
                 answer = [text.split("[/INST]")[-1] for text in output_text]
+            if raw_logger:
+                for i, ans in enumerate(answer):
+                    raw_logger.info(f"q={len(answers) + i} | {ans.strip()}")
             answers.extend(answer)
 
     return answers
@@ -240,6 +243,7 @@ def process_pas(data, model, tokenizer, model_file):
 
     # Preprocess activation dataset
     all_head_wise_activations = model.preprocess_activate_dataset(personal_data)
+    # now we have all the head-wise activations of the constructed pos vs. neg pairs (in that in the future, we can just select from these activations to train the probes)
 
     for index, sample in enumerate(tqdm(data)):
         if index in done_indices:
@@ -253,21 +257,21 @@ def process_pas(data, model, tokenizer, model_file):
 
         # Prepare labels and activations for each personality trait
         labels = []
-        head_wise_activations = []
+        head_wise_activations = [] # this is head-wise activation for current sample
         personal_number = 0
         for personal in ['A', 'C', 'E', 'N', 'O']:
             for item in sample['train']:
                 if item['label_ocean'] == personal:
                     if item['value'] not in [0, 3]:
                         if item['value'] > 3:
-                            labels.extend([1, 0])
+                            labels.extend([1, 0]) # if the sample is positive on the item, then label 1 for pos and 0 for neg
                         else:
                             labels.extend([0, 1])
                         head_wise_activations.extend([
                             deepcopy(all_head_wise_activations[personal_number]),
                             deepcopy(all_head_wise_activations[personal_number + 1])
-                        ])
-                    personal_number += 2
+                        ]) # so that two activations are appended for each item
+                    personal_number += 2 # this analogous to prior index on adding both pos and neg pairs for each item
 
         # Get activations for intervention
         activate = model.get_activations(deepcopy(head_wise_activations), labels, num_to_intervene=24)
@@ -281,13 +285,14 @@ def process_pas(data, model, tokenizer, model_file):
             model.set_activate(activate, num)
 
             raw_logger.info(f"=== subject={index} case={case_id} alpha={num} ===")
-
+            
+            # so during the alpha, which uses test set, so it is eval stage
+            # which means for eval stage, we included the train stage behavior as input to the model
+            # !!! important: it is incorport extra input (item's text) to the model !!!
+            # it may be viewed as a trick to make the model more accurate on the test set
             answers = generateAnswer(tokenizer, model, data[0]['test'], TEMPLATE,
-                                     system_prompt=system_prompt_text, model_file=model_file)
-
-            # Log raw generations
-            for q_idx, ans in enumerate(answers):
-                raw_logger.info(f"q={q_idx} | {ans.strip()}")
+                                     system_prompt=system_prompt_text, model_file=model_file,
+                                     raw_logger=raw_logger)
 
             # Process answers and calculate results
             result = process_answers(answers, sample)
@@ -393,10 +398,12 @@ def main(mode=None, model_file='', model=None, tokenizer=None, dataset_set='OOD'
     Main function to run personality assessment.
     """
     dataset, text_file, train_index, test_index = getItems('PAPI')
+    # Test-set.json, text_file: all questions, train_index, test_index: index of questions in text_file
     print("-" * 40)
     print(f"Current Prompt: {TEMPLATE}")
     results = []
     data = from_index_to_data(train_index, test_index, text_file, dataset, dataset_set)
+    # data: [{'train': [], 'test': []}...]
 
     if num_subjects > 0:
         data = data[:num_subjects]

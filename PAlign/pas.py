@@ -14,7 +14,6 @@ import sys
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from datasets import load_dataset
 from tqdm import tqdm
 import numpy as np
 import pandas as pd
@@ -204,12 +203,20 @@ def get_model(model_name='meta-llama/Llama-2-7b-chat-hf', use_bit_4=False, adapt
                 self.model.model.layers[i].self_attn.o_proj.bias = self.bias_cache[i]
 
         def get_activations(self, all_head_wise_activations, labels, num_to_intervene=48):
+            """
+            Gets the activations for the model based on the given head-wise activations and labels.
+
+            Args:
+            all_head_wise_activations: All head-wise activations for both pos and neg pairs of current sample.
+            labels: Labels for the activations for if it fits current item's pos or neg pair.
+            num_to_intervene: Number of heads to intervene.
+            """
             def get_top_heads(separated_activations, separated_labels, num_layers, num_heads, num_to_intervene):
 
                 probes, all_head_accs_np = train_probes(separated_activations,
                                                         separated_labels, num_layers=num_layers, num_heads=num_heads)
                 all_head_accs_np = all_head_accs_np.reshape(num_layers, num_heads,2)
-                all_head_accs_np = all_head_accs_np.mean(2)
+                all_head_accs_np = all_head_accs_np.mean(2) # so it is take the mean accuracy of training and validation sets...
                 top_accs = np.argsort(all_head_accs_np.reshape(num_heads * num_layers))[::-1][:num_to_intervene]
                 top_heads = [flattened_idx_to_layer_head(idx, num_heads) for idx in top_accs]
 
@@ -289,9 +296,12 @@ def get_model(model_name='meta-llama/Llama-2-7b-chat-hf', use_bit_4=False, adapt
                         #usable_labels = np.concatenate([separated_labels[i] for i in usable_idxs], axis=0)
                         usable_labels = np.array(usable_labels)
                         head_wise_activations = usable_head_wise_activations[:,layer, head, :]
+                        # so here's the average activation of pos activations for current layer's head; average across all pos pairs
                         true_mass_mean = np.mean(head_wise_activations[usable_labels == 1], axis=0)
+                        # this is neg activation; average across all neg pairs
                         false_mass_mean = np.mean(head_wise_activations[usable_labels == 0], axis=0)
-                        com_directions.append(true_mass_mean - false_mass_mean)
+                        # and finally append the differences together, so that we can store the case for each layer's head
+                        com_directions.append(true_mass_mean - false_mass_mean) 
                 com_directions = np.array(com_directions)
 
                 return com_directions

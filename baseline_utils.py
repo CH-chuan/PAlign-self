@@ -49,9 +49,12 @@ def process_answers(answers,sample):
         parsed_result = re.search(r"[abcdeABCDE][^a-zA-Z]", answers[answer_number][:12], flags=0)
         if parsed_result:
             parsed_result = parsed_result.group()[0].upper()
+            # this step is to calculate the alignment between the model's answer and the item's value
             score = abs(SCORES[parsed_result] - item['value'])
             global_cnt[parsed_result] += 1
             global_result_abs[label].append(score)
+
+            # now we re-arrange score to be 1-5, so that we can use it to calculate the mean of the model's answer
             score = SCORES[parsed_result]
             if key == 1:
                 global_result[label].append(score)
@@ -67,8 +70,8 @@ def process_answers(answers,sample):
         'case': sample['test'][0]['case'],
         'result': global_result,
         'count': global_cnt,
-        'mean_ver': mean_var,
-        'mean_ver_abs': mean_var_abs
+        'mean_ver': mean_var, 
+        'mean_ver_abs': mean_var_abs # 
     }
 
     return result_file
