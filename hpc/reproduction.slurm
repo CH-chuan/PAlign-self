@@ -43,7 +43,7 @@ echo "GPUs:       ${SLURM_GPUS_ON_NODE:-?}"
 echo "============================================"
 
 # Load modules and activate env
-module load cuda
+module load miniforge
 eval "$(conda shell.bash hook)"
 conda activate "${CONDA_ENV}"
 
