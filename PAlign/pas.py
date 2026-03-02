@@ -203,6 +203,14 @@ def get_model(model_name='meta-llama/Llama-2-7b-chat-hf', use_bit_4=False, adapt
                 self.model.model.layers[i].self_attn.o_proj.bias = self.bias_cache[i]
 
         def get_activations(self, all_head_wise_activations, labels, num_to_intervene=48):
+            """
+            Train probes on head-wise activations, select top heads, and compute intervention vectors.
+
+            Args:
+                all_head_wise_activations: Head-wise activations for pos/neg pairs of the current sample.
+                labels: Binary labels indicating pos (1) or neg (0) for each activation.
+                num_to_intervene: Number of top heads to select for intervention.
+            """
             def get_top_heads(separated_activations, separated_labels, num_layers, num_heads, num_to_intervene):
 
                 probes, all_head_accs_np = train_probes(separated_activations,
