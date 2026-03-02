@@ -77,7 +77,7 @@ case "${METHOD}" in
             --modes PAS \
             --model_file "${MODEL_NAME}" \
             --num_subjects "${NUM_SUBJECTS}" \
-            --output_dir "${OUTPUT_DIR}" \
+            --output_dir "${OUTPUT_DIR}/pas" \
             --batch_size "${BATCH_SIZE}"
         ;;
     few_shot_pas)
@@ -85,39 +85,39 @@ case "${METHOD}" in
             --modes few-shot-PAS \
             --model_file "${MODEL_NAME}" \
             --num_subjects "${NUM_SUBJECTS}" \
-            --output_dir "${OUTPUT_DIR}" \
+            --output_dir "${OUTPUT_DIR}/few_shot_pas" \
             --batch_size "${BATCH_SIZE}"
         ;;
     dpo)
         python -m benchmarks.dpo.run_dpo \
             --model_name "${MODEL_NAME}" \
             --num_subjects "${NUM_SUBJECTS}" \
-            --output_dir "${OUTPUT_DIR}/benchmarks/dpo"
+            --output_dir "${OUTPUT_DIR}/dpo"
         ;;
     ppo)
         python -m benchmarks.ppo.run_ppo \
             --model_name "${MODEL_NAME}" \
             --num_subjects "${NUM_SUBJECTS}" \
-            --output_dir "${OUTPUT_DIR}/benchmarks/ppo"
+            --output_dir "${OUTPUT_DIR}/ppo"
         ;;
     prompt_morl)
         python -m benchmarks.prompt_morl.run_prompt_morl \
             --model_name "${MODEL_NAME}" \
             --num_subjects "${NUM_SUBJECTS}" \
-            --output_dir "${OUTPUT_DIR}/benchmarks/prompt_morl"
+            --output_dir "${OUTPUT_DIR}/prompt_morl"
         ;;
     soups)
         python -m benchmarks.soups.run_soups \
             --model_name "${MODEL_NAME}" \
             --num_subjects "${NUM_SUBJECTS}" \
-            --output_dir "${OUTPUT_DIR}/benchmarks/soups"
+            --output_dir "${OUTPUT_DIR}/soups"
         ;;
     few_shot)
         python main.py \
             --modes few-shot \
             --model_file "${MODEL_NAME}" \
             --num_subjects "${NUM_SUBJECTS}" \
-            --output_dir "${OUTPUT_DIR}" \
+            --output_dir "${OUTPUT_DIR}/few_shot" \
             --batch_size "${BATCH_SIZE}"
         ;;
     personality_prompt)
@@ -125,7 +125,7 @@ case "${METHOD}" in
             --modes personality_prompt \
             --model_file "${MODEL_NAME}" \
             --num_subjects "${NUM_SUBJECTS}" \
-            --output_dir "${OUTPUT_DIR}" \
+            --output_dir "${OUTPUT_DIR}/personality_prompt" \
             --batch_size "${BATCH_SIZE}"
         ;;
     *)
