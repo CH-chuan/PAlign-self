@@ -42,21 +42,30 @@ echo "GPUs:       ${SLURM_GPUS_ON_NODE:-?}"
 echo "============================================"
 
 # Load modules and activate env
-# Note: conda's shell functions use unset variables internally,
-# so we must disable -u (nounset) around activation.
+# 'source conda.sh' is more reliable than 'conda shell.bash hook' in SLURM
+# batch shells. We also disable -u because conda functions reference unset vars.
 module load miniforge
 set +u
-eval "$(conda shell.bash hook)"
+__conda_base="$(conda info --base)"
+source "${__conda_base}/etc/profile.d/conda.sh"
 conda activate "${CONDA_ENV}"
 set -u
 
-# Verify activation worked
+# Hard-verify that PATH actually points to the env's Python
+_py="$(which python)"
+if [[ "${_py}" != *"${CONDA_ENV}"* ]]; then
+    echo "WARNING: conda activate did not update PATH (python=${_py})"
+    echo "Falling back to direct PATH manipulation..."
+    _env_path="$(conda info --envs | awk -v e="${CONDA_ENV}" '$1==e {print $NF}')"
+    if [[ -z "${_env_path}" || ! -d "${_env_path}/bin" ]]; then
+        echo "ERROR: Could not find conda env '${CONDA_ENV}'"
+        exit 1
+    fi
+    export PATH="${_env_path}/bin:${PATH}"
+fi
+
 echo "Python:     $(which python)"
 echo "Conda env:  ${CONDA_DEFAULT_ENV:-NOT SET}"
-python -c "import sys; print(f'sys.executable: {sys.executable}')" || {
-    echo "ERROR: conda env activation failed"
-    exit 1
-}
 
 cd "${PROJECT_DIR}"
 mkdir -p logs/reproduction
