@@ -51,6 +51,8 @@ def train_prompt_morl(model, tokenizer, all_data, adapter_dir,
         report_to="none",
     )
 
+    training_args.dataset_text_field = 'text'
+
     trainer = SFTTrainer(
         model=peft_model,
         args=training_args,

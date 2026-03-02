@@ -1,3 +1,4 @@
+import json
 import re
 import numpy as np
 from tqdm import tqdm
@@ -77,17 +78,18 @@ def process_answers(answers,sample):
     return result_file
 
 
-def process_few_shot(data, model, tokenizer, model_file, template):
+def process_few_shot(data, model, tokenizer, model_file):
     """
     Process data using few-shot learning method.
     """
+    from main import generateAnswer, TEMPLATE
     results = []
     for i in tqdm(data):
         system_prompt_text = 'Here are some of your behaviors and your level of recognition towards them' + \
                              ';'.join([f"{it['text']}:{SCORES_BACK[it['value']]}" for it in i['train']])
-        answers = generate_answer(tokenizer, model, data[0]['test'], template, scores=SCORES,
+        answers = generateAnswer(tokenizer, model, i['test'], TEMPLATE, scores=SCORES,
                                   system_prompt=system_prompt_text, model_file=model_file)
-        results.extend(process_answers([i], answers))
+        results.append(process_answers(answers, i))
     return results
 
 
@@ -95,11 +97,12 @@ def process_personality_prompt(data, model, tokenizer, model_file):
     """
     Process data using personality prompts method.
     """
-    system_prompt = json.load(open('PAPI/personality_prompt'))
+    from main import generateAnswer, TEMPLATE
+    system_prompt = json.load(open('PAPI/personality_prompt.json'))
     results = []
     for index, i in enumerate(tqdm(data)):
         system_prompt_text = system_prompt[index]['output'][0]
-        answers = generateAnswer(tokenizer, model, data[0]['test'], TEMPLATE, system_prompt=system_prompt_text,
+        answers = generateAnswer(tokenizer, model, i['test'], TEMPLATE, system_prompt=system_prompt_text,
                                  model_file=model_file)
-        results.extend(process_answers([i], answers))
+        results.append(process_answers(answers, i))
     return results

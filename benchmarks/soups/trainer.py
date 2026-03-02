@@ -85,13 +85,17 @@ def train_one_extreme_model(model_name, tokenizer, all_data, trait, direction,
             for i in indices
         ]
 
-        response_tensors = ppo_trainer.generate(
-            query_tensors,
-            max_new_tokens=ppo_hp.max_new_tokens,
-            do_sample=True,
-            top_k=0,
-            top_p=1.0,
-        )
+        try:
+            response_tensors = ppo_trainer.generate(
+                query_tensors,
+                max_new_tokens=ppo_hp.max_new_tokens,
+                do_sample=True,
+                top_k=0,
+                top_p=1.0,
+            )
+        except (RuntimeError, torch.cuda.CudaError) as e:
+            print(f"PPO training diverged at step {steps_done}: {e}")
+            break
 
         responses_text = [
             tokenizer.decode(r, skip_special_tokens=True) for r in response_tensors
@@ -101,8 +105,12 @@ def train_one_extreme_model(model_name, tokenizer, all_data, trait, direction,
             for resp, idx in zip(responses_text, indices)
         ]
 
-        ppo_trainer.step(query_tensors, response_tensors, rewards)
+        stats = ppo_trainer.step(query_tensors, response_tensors, rewards)
         steps_done += 1
+
+        if 'objective/kl' in stats and stats['objective/kl'] < -100:
+            print(f"PPO KL diverged at step {steps_done} (kl={stats['objective/kl']:.1f}), stopping early.")
+            break
 
     # Save adapter
     os.makedirs(adapter_dir, exist_ok=True)

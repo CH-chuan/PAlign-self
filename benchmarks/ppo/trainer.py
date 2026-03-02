@@ -86,14 +86,18 @@ def train_ppo_for_subject(model_name, tokenizer, subject_data, output_dir,
             for i in indices
         ]
 
-        # Generate responses
-        response_tensors = ppo_trainer.generate(
-            query_tensors,
-            max_new_tokens=hparams.max_new_tokens,
-            do_sample=True,
-            top_k=0,
-            top_p=1.0,
-        )
+        # Generate responses (catch CUDA errors from diverged training)
+        try:
+            response_tensors = ppo_trainer.generate(
+                query_tensors,
+                max_new_tokens=hparams.max_new_tokens,
+                do_sample=True,
+                top_k=0,
+                top_p=1.0,
+            )
+        except (RuntimeError, torch.cuda.CudaError) as e:
+            print(f"PPO training diverged at step {steps_done}: {e}")
+            break
 
         # Compute rewards
         responses_text = [
@@ -108,7 +112,14 @@ def train_ppo_for_subject(model_name, tokenizer, subject_data, output_dir,
         stats = ppo_trainer.step(query_tensors, response_tensors, rewards)
         steps_done += 1
 
+        # Early stop if KL diverges badly
+        if 'objective/kl' in stats and stats['objective/kl'] < -100:
+            print(f"PPO KL diverged at step {steps_done} (kl={stats['objective/kl']:.1f}), stopping early.")
+            break
+
     # Save the adapter
+    import os
+    os.makedirs(output_dir, exist_ok=True)
     model.save_pretrained(output_dir)
 
     return model
