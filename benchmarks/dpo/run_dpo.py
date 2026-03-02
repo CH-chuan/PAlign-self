@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 from benchmarks.common.config import QLoRAConfig, DPOHyperparams
 from benchmarks.common.data import load_all_data
 from benchmarks.common.model_utils import load_base_model_and_tokenizer, delete_adapter
-from benchmarks.common.evaluation import evaluate_subject, aggregate_and_save_results
+from benchmarks.common.evaluation import evaluate_subject, aggregate_and_save_results, setup_raw_logger
 from benchmarks.common.resume import (
     save_subject_result, load_completed_results, append_progress,
 )
@@ -39,8 +39,11 @@ def run_dpo(model_name, num_subjects=0, output_dir=None, data_dir='PAPI'):
     if done_indices:
         print(f"Resuming: {len(done_indices)} subjects already completed.")
 
-    # Load base model (quantized, no LoRA yet)
-    base_model, tokenizer = load_base_model_and_tokenizer(model_name)
+    # Set up raw generation logger
+    raw_logger = setup_raw_logger(output_dir)
+
+    # Load tokenizer once (base model is reloaded per subject to avoid stale LoRA wrappers)
+    _, tokenizer = load_base_model_and_tokenizer(model_name)
 
     for idx in tqdm(range(total), desc="DPO subjects"):
         if idx in done_indices:
@@ -48,6 +51,9 @@ def run_dpo(model_name, num_subjects=0, output_dir=None, data_dir='PAPI'):
 
         subject_data = data[idx]
         case_id = subject_data['test'][0]['case']
+
+        # Fresh base model each subject (apply_qlora wraps in-place)
+        base_model, _ = load_base_model_and_tokenizer(model_name)
 
         # Train DPO adapter for this subject
         tmp_adapter_dir = os.path.join(output_dir, 'tmp_adapter')
@@ -57,11 +63,15 @@ def run_dpo(model_name, num_subjects=0, output_dir=None, data_dir='PAPI'):
 
         if peft_model is None:
             print(f"Subject {idx}: no valid training pairs, skipping.")
+            del base_model
+            torch.cuda.empty_cache()
             continue
 
         # Evaluate
+        raw_logger.info(f"=== subject={idx} case={case_id} ===")
         result = evaluate_subject(
             peft_model, tokenizer, subject_data, model_name,
+            raw_logger=raw_logger,
         )
         results[idx] = result
 
@@ -80,8 +90,8 @@ def run_dpo(model_name, num_subjects=0, output_dir=None, data_dir='PAPI'):
         print(f"[{datetime.now().strftime('%H:%M:%S')}] Subject {idx}/{total} | "
               f"case={case_id} | score_sum={score_sum:.3f}")
 
-        # Discard adapter: unload LoRA and free memory
-        del peft_model
+        # Discard adapter and base model: free memory
+        del peft_model, base_model
         torch.cuda.empty_cache()
         delete_adapter(tmp_adapter_dir)
 

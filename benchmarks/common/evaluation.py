@@ -1,5 +1,6 @@
 """Shared evaluation pipeline for all benchmark methods."""
 import json
+import logging
 import os
 import re
 
@@ -7,6 +8,18 @@ import numpy as np
 import torch
 
 from benchmarks.common.config import SCORES, TEMPLATE, SYSTEM_PROMPT
+
+
+def setup_raw_logger(output_dir):
+    """Set up a file logger for raw model generations."""
+    os.makedirs(output_dir, exist_ok=True)
+    raw_logger = logging.getLogger(f'raw_generations_{output_dir}')
+    raw_logger.setLevel(logging.INFO)
+    if not raw_logger.handlers:
+        fh = logging.FileHandler(os.path.join(output_dir, 'raw_generations.log'), mode='a')
+        fh.setFormatter(logging.Formatter('[%(asctime)s] %(message)s', datefmt='%Y-%m-%dT%H:%M:%S'))
+        raw_logger.addHandler(fh)
+    return raw_logger
 
 
 def prompt_to_tokens_hf(tokenizer, system_prompt, instruction, model_output, model_name):
@@ -31,7 +44,7 @@ def prompt_to_tokens_hf(tokenizer, system_prompt, instruction, model_output, mod
 
 
 def generate_answers(model, tokenizer, test_items, model_name,
-                     system_prompt=SYSTEM_PROMPT, batch_size=3):
+                     system_prompt=SYSTEM_PROMPT, batch_size=3, raw_logger=None):
     """Generate answers for test items using a standard HF/PEFT model.
 
     Follows the same pattern as main.py:generateAnswer() but works with
@@ -88,12 +101,14 @@ def generate_answers(model, tokenizer, test_items, model_name,
             else:
                 answer = text
             answers.append(answer)
+            if raw_logger:
+                raw_logger.info(f"q={len(answers)-1} | {answer.strip()}")
 
     return answers
 
 
 def evaluate_subject(model, tokenizer, subject_data, model_name,
-                     system_prompt=SYSTEM_PROMPT, batch_size=3):
+                     system_prompt=SYSTEM_PROMPT, batch_size=3, raw_logger=None):
     """Evaluate a single subject: generate answers and score.
 
     Uses process_answers from baseline_utils.
@@ -104,7 +119,7 @@ def evaluate_subject(model, tokenizer, subject_data, model_name,
     from baseline_utils import process_answers
     answers = generate_answers(
         model, tokenizer, subject_data['test'], model_name,
-        system_prompt=system_prompt, batch_size=batch_size,
+        system_prompt=system_prompt, batch_size=batch_size, raw_logger=raw_logger,
     )
     return process_answers(answers, subject_data)
 

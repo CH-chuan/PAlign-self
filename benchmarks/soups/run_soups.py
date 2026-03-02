@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
 from benchmarks.common.data import load_all_data
 from benchmarks.common.model_utils import load_base_model_and_tokenizer
-from benchmarks.common.evaluation import evaluate_subject, aggregate_and_save_results
+from benchmarks.common.evaluation import evaluate_subject, aggregate_and_save_results, setup_raw_logger
 from benchmarks.common.resume import (
     save_subject_result, load_completed_results, append_progress,
 )
@@ -47,14 +47,14 @@ def run_soups(model_name, num_subjects=0, output_dir=None, data_dir='PAPI'):
         model_name, tokenizer, data, adapters_dir,
     )
 
+    # Set up raw generation logger
+    raw_logger = setup_raw_logger(output_dir)
+
     # Phase 2: Per-subject merge + eval
     print("\n=== Phase 2: Per-subject merge and evaluation ===")
     results, done_indices = load_completed_results(total, output_dir)
     if done_indices:
         print(f"Resuming eval: {len(done_indices)} subjects already completed.")
-
-    # Load base model for eval (shared across subjects)
-    base_model, tokenizer = load_base_model_and_tokenizer(model_name)
 
     for idx in tqdm(range(total), desc="Soups eval"):
         if idx in done_indices:
@@ -63,14 +63,19 @@ def run_soups(model_name, num_subjects=0, output_dir=None, data_dir='PAPI'):
         subject_data = data[idx]
         case_id = subject_data['test'][0]['case']
 
+        # Fresh base model each subject (PeftModel.from_pretrained wraps in-place)
+        base_model, _ = load_base_model_and_tokenizer(model_name)
+
         # Merge adapters with subject-specific weights
         peft_model = merge_soup_for_subject(
             base_model, subject_data, adapter_paths,
         )
 
         # Evaluate
+        raw_logger.info(f"=== subject={idx} case={case_id} ===")
         result = evaluate_subject(
             peft_model, tokenizer, subject_data, model_name,
+            raw_logger=raw_logger,
         )
         results[idx] = result
 
@@ -89,8 +94,8 @@ def run_soups(model_name, num_subjects=0, output_dir=None, data_dir='PAPI'):
         print(f"[{datetime.now().strftime('%H:%M:%S')}] Subject {idx}/{total} | "
               f"case={case_id} | score_sum={score_sum:.3f}")
 
-        # Free merged model (base_model is reused)
-        del peft_model
+        # Free merged model and base model
+        del peft_model, base_model
         torch.cuda.empty_cache()
 
     # Aggregate results

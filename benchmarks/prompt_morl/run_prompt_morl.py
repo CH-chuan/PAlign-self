@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
 from benchmarks.common.data import load_all_data, get_subject_trait_means, get_personality_prefix
 from benchmarks.common.model_utils import load_base_model_and_tokenizer, load_adapter
-from benchmarks.common.evaluation import evaluate_subject, aggregate_and_save_results
+from benchmarks.common.evaluation import evaluate_subject, aggregate_and_save_results, setup_raw_logger
 from benchmarks.common.resume import (
     save_subject_result, load_completed_results, append_progress,
 )
@@ -47,6 +47,9 @@ def run_prompt_morl(model_name, num_subjects=0, output_dir=None, data_dir='PAPI'
             base_model, tokenizer, data, adapter_dir,
         )
 
+    # Set up raw generation logger
+    raw_logger = setup_raw_logger(output_dir)
+
     # Eval phase: per-subject evaluation with personality prefix
     results, done_indices = load_completed_results(total, output_dir)
     if done_indices:
@@ -65,9 +68,10 @@ def run_prompt_morl(model_name, num_subjects=0, output_dir=None, data_dir='PAPI'
         system_prompt = personality_prefix + " You are a helpful, honest and concise assistant."
 
         # Evaluate with this subject's personality prefix
+        raw_logger.info(f"=== subject={idx} case={case_id} ===")
         result = evaluate_subject(
             peft_model, tokenizer, subject_data, model_name,
-            system_prompt=system_prompt,
+            system_prompt=system_prompt, raw_logger=raw_logger,
         )
         results[idx] = result
 

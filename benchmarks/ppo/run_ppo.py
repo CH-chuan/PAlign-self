@@ -10,7 +10,7 @@ from tqdm import tqdm
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
 from benchmarks.common.data import load_all_data
-from benchmarks.common.evaluation import evaluate_subject, aggregate_and_save_results
+from benchmarks.common.evaluation import evaluate_subject, aggregate_and_save_results, setup_raw_logger
 from benchmarks.common.model_utils import delete_adapter
 from benchmarks.common.resume import (
     save_subject_result, load_completed_results, append_progress,
@@ -37,6 +37,9 @@ def run_ppo(model_name, num_subjects=0, output_dir=None, data_dir='PAPI'):
     results, done_indices = load_completed_results(total, output_dir)
     if done_indices:
         print(f"Resuming: {len(done_indices)} subjects already completed.")
+
+    # Set up raw generation logger
+    raw_logger = setup_raw_logger(output_dir)
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     if tokenizer.pad_token is None:
@@ -67,8 +70,10 @@ def run_ppo(model_name, num_subjects=0, output_dir=None, data_dir='PAPI'):
         eval_model = load_ppo_model_for_eval(model_name, tmp_adapter_dir, tokenizer)
 
         # Evaluate
+        raw_logger.info(f"=== subject={idx} case={case_id} ===")
         result = evaluate_subject(
             eval_model, tokenizer, subject_data, model_name,
+            raw_logger=raw_logger,
         )
         results[idx] = result
 
