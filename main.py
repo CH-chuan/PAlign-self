@@ -34,6 +34,7 @@ SCORES_BACK = {
 }
 
 SYSTEM_PROMPT = "You are a helpful, honest and concise assistant."
+NEUTRAL_SYSTEM_PROMPT = "You are an AI assistant."
 
 # Templates for personality assessment
 TEMPLATE = """Given a statement of you: "You {}."
@@ -91,11 +92,10 @@ def getItems(filename):
     return data, pd.read_excel(filename + '/IPIP-NEO-ItemKey.xls'), split_data['train_index'], split_data['test_index']
 
 
-def generateAnswer(tokenizer, model, dataset, template, scores=SCORES, system_prompt=SYSTEM_PROMPT, model_file=None, raw_logger=None):
+def generateAnswer(tokenizer, model, dataset, template, scores=SCORES, system_prompt=SYSTEM_PROMPT, model_file=None, raw_logger=None, batch_size=16):
     """
     Generate answers using the model.
     """
-    batch_size = 3
     questions = [item["text"].lower() for item in dataset]
     answers = []
 
@@ -202,7 +202,8 @@ def setup_raw_logger(output_dir='./reproduction'):
     return raw_logger
 
 
-def process_pas(data, model, tokenizer, model_file, output_dir='./reproduction'):
+def process_pas(data, model, tokenizer, model_file, output_dir='./reproduction',
+                use_few_shot=False, batch_size=16):
     """
     Process data using Persona Activation Steering (PAS) method.
 
@@ -252,9 +253,12 @@ def process_pas(data, model, tokenizer, model_file, output_dir='./reproduction')
 
         model.reset_all()
 
-        # Generate system prompt from training data
-        system_prompt_text = 'Here are some of your behaviors and your level of recognition towards them;' + \
-                             ';'.join([f"{it['text']}:{SCORES_BACK[it['value']]}" for it in sample['train']])
+        # Generate system prompt
+        if use_few_shot:
+            system_prompt_text = 'Here are some of your behaviors and your level of recognition towards them;' + \
+                                 ';'.join([f"{it['text']}:{SCORES_BACK[it['value']]}" for it in sample['train']])
+        else:
+            system_prompt_text = NEUTRAL_SYSTEM_PROMPT
 
         # Prepare labels and activations for each personality trait
         labels = []
@@ -293,7 +297,7 @@ def process_pas(data, model, tokenizer, model_file, output_dir='./reproduction')
             # it may be viewed as a trick to make the model more accurate on the test set
             answers = generateAnswer(tokenizer, model, data[0]['test'], TEMPLATE,
                                      system_prompt=system_prompt_text, model_file=model_file,
-                                     raw_logger=raw_logger)
+                                     raw_logger=raw_logger, batch_size=batch_size)
 
             # Process answers and calculate results
             result = process_answers(answers, sample)
@@ -394,7 +398,7 @@ def print_and_save_results(results, mode, model_file, dataset_set, output_dir='.
     print(f"Results saved to {log_filename}")
 
 
-def main(mode=None, model_file='', model=None, tokenizer=None, dataset_set='OOD', num_subjects=0, output_dir='./reproduction'):
+def main(mode=None, model_file='', model=None, tokenizer=None, dataset_set='OOD', num_subjects=0, output_dir='./reproduction', batch_size=16):
     """
     Main function to run personality assessment.
     """
@@ -413,20 +417,21 @@ def main(mode=None, model_file='', model=None, tokenizer=None, dataset_set='OOD'
     if mode == 'NO_CHANGE':
         # Process data without any changes
         model.reset_all()
-        answers = generateAnswer(tokenizer, model, data[0]['test'], TEMPLATE, model_file=model_file)
+        answers = generateAnswer(tokenizer, model, data[0]['test'], TEMPLATE, model_file=model_file, batch_size=batch_size)
         results = process_answers(data, answers)
 
     elif mode == 'few-shot':
         # Process data using few-shot learning
-        results = process_few_shot(data, model, tokenizer, model_file)
+        results = process_few_shot(data, model, tokenizer, model_file, batch_size=batch_size)
 
     elif mode == 'personality_prompt':
         # Process data using personality prompts
-        results = process_personality_prompt(data, model, tokenizer, model_file)
+        results = process_personality_prompt(data, model, tokenizer, model_file, batch_size=batch_size)
 
-    elif mode == 'PAS':
+    elif mode in ('PAS', 'few-shot-PAS'):
         # Process data using PAS (Personality Assessment System)
-        results = process_pas(data, model, tokenizer, model_file, output_dir=output_dir)
+        results = process_pas(data, model, tokenizer, model_file, output_dir=output_dir,
+                             use_few_shot=(mode == 'few-shot-PAS'), batch_size=batch_size)
 
     # Print and save final results
     print_and_save_results(results, mode, model_file, dataset_set, output_dir=output_dir)
@@ -436,16 +441,18 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="Personality Alignment of LLMs")
-    parser.add_argument("--modes", default='PAS', help="Assessment mode (PAS, NO_CHANGE, few-shot, personality_prompt)")
+    parser.add_argument("--modes", default='PAS', help="Assessment mode (PAS, few-shot-PAS, NO_CHANGE, few-shot, personality_prompt)")
     parser.add_argument("--model_file", default='meta-llama/Meta-Llama-3-8B-Instruct', help="HuggingFace model name")
     parser.add_argument("--num_subjects", type=int, default=0, help="Number of subjects to process (0=all)")
     parser.add_argument("--output_dir", default='./reproduction', help="Output directory for results")
+    parser.add_argument("--batch_size", type=int, default=16, help="Inference batch size (default 16 for A100-80GB)")
     args = parser.parse_args()
 
     model_file = args.model_file
     modes = [args.modes]
     num_subjects = args.num_subjects
     output_dir = args.output_dir
+    batch_size = args.batch_size
 
     model, tokenizer = get_model(model_file)
     if 'llama-3' in model_file.lower():
@@ -454,4 +461,5 @@ if __name__ == "__main__":
 
     for mode in modes:
         main(mode=mode, model_file=model_file, model=model, tokenizer=tokenizer,
-             dataset_set='OOD', num_subjects=num_subjects, output_dir=output_dir)
+             dataset_set='OOD', num_subjects=num_subjects, output_dir=output_dir,
+             batch_size=batch_size)

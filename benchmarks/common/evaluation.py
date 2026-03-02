@@ -44,7 +44,7 @@ def prompt_to_tokens_hf(tokenizer, system_prompt, instruction, model_output, mod
 
 
 def generate_answers(model, tokenizer, test_items, model_name,
-                     system_prompt=SYSTEM_PROMPT, batch_size=3, raw_logger=None):
+                     system_prompt=SYSTEM_PROMPT, batch_size=16, raw_logger=None):
     """Generate answers for test items using a standard HF/PEFT model.
 
     Follows the same pattern as main.py:generateAnswer() but works with
@@ -108,7 +108,7 @@ def generate_answers(model, tokenizer, test_items, model_name,
 
 
 def evaluate_subject(model, tokenizer, subject_data, model_name,
-                     system_prompt=SYSTEM_PROMPT, batch_size=3, raw_logger=None):
+                     system_prompt=SYSTEM_PROMPT, batch_size=16, raw_logger=None):
     """Evaluate a single subject: generate answers and score.
 
     Uses process_answers from baseline_utils.

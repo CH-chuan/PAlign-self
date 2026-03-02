@@ -78,7 +78,7 @@ def process_answers(answers,sample):
     return result_file
 
 
-def process_few_shot(data, model, tokenizer, model_file):
+def process_few_shot(data, model, tokenizer, model_file, batch_size=16):
     """
     Process data using few-shot learning method.
     """
@@ -88,12 +88,13 @@ def process_few_shot(data, model, tokenizer, model_file):
         system_prompt_text = 'Here are some of your behaviors and your level of recognition towards them' + \
                              ';'.join([f"{it['text']}:{SCORES_BACK[it['value']]}" for it in i['train']])
         answers = generateAnswer(tokenizer, model, i['test'], TEMPLATE, scores=SCORES,
-                                  system_prompt=system_prompt_text, model_file=model_file)
+                                  system_prompt=system_prompt_text, model_file=model_file,
+                                  batch_size=batch_size)
         results.append(process_answers(answers, i))
     return results
 
 
-def process_personality_prompt(data, model, tokenizer, model_file):
+def process_personality_prompt(data, model, tokenizer, model_file, batch_size=16):
     """
     Process data using personality prompts method.
     """
@@ -103,6 +104,6 @@ def process_personality_prompt(data, model, tokenizer, model_file):
     for index, i in enumerate(tqdm(data)):
         system_prompt_text = system_prompt[index]['output'][0]
         answers = generateAnswer(tokenizer, model, i['test'], TEMPLATE, system_prompt=system_prompt_text,
-                                 model_file=model_file)
+                                 model_file=model_file, batch_size=batch_size)
         results.append(process_answers(answers, i))
     return results

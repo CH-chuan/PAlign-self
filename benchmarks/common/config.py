@@ -59,8 +59,8 @@ class DPOHyperparams:
     learning_rate: float = 5e-4
     warmup_steps: int = 100
     weight_decay: float = 0.05
-    per_device_train_batch_size: int = 4
-    gradient_accumulation_steps: int = 4  # effective batch 16
+    per_device_train_batch_size: int = 16
+    gradient_accumulation_steps: int = 1
     max_steps: int = 250
     beta: float = 0.1
     max_length: int = 512
@@ -71,7 +71,7 @@ class DPOHyperparams:
 class PPOHyperparams:
     """PPO training hyperparameters from the paper."""
     learning_rate: float = 1.41e-5
-    per_device_train_batch_size: int = 16
+    per_device_train_batch_size: int = 32
     max_steps: int = 250
     max_new_tokens: int = 15
     kl_penalty: str = "kl"
@@ -82,8 +82,8 @@ class PPOHyperparams:
 class PromptMORLHyperparams:
     """Prompt-MORL training hyperparameters from the paper."""
     learning_rate: float = 5e-4
-    per_device_train_batch_size: int = 4
-    gradient_accumulation_steps: int = 4  # effective batch 16
+    per_device_train_batch_size: int = 16
+    gradient_accumulation_steps: int = 1
     max_steps: int = 250
     max_seq_length: int = 512
 

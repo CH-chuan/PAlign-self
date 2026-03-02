@@ -50,7 +50,7 @@ def train_one_extreme_model(model_name, tokenizer, all_data, trait, direction,
     ppo_config = PPOConfig(
         learning_rate=ppo_hp.learning_rate,
         batch_size=ppo_hp.per_device_train_batch_size,
-        mini_batch_size=min(4, ppo_hp.per_device_train_batch_size),
+        mini_batch_size=min(8, ppo_hp.per_device_train_batch_size),
         ppo_epochs=4,
         kl_penalty=ppo_hp.kl_penalty,
         init_kl_coef=ppo_hp.init_kl_coef,

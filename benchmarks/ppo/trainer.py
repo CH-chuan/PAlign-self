@@ -47,7 +47,7 @@ def train_ppo_for_subject(model_name, tokenizer, subject_data, output_dir,
     ppo_config = PPOConfig(
         learning_rate=hparams.learning_rate,
         batch_size=hparams.per_device_train_batch_size,
-        mini_batch_size=min(4, hparams.per_device_train_batch_size),
+        mini_batch_size=min(8, hparams.per_device_train_batch_size),
         ppo_epochs=4,
         kl_penalty=hparams.kl_penalty,
         init_kl_coef=hparams.init_kl_coef,
