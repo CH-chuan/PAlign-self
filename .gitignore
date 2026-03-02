@@ -14,6 +14,14 @@ reproduction/full_run.log
 reproduction/scatter_comparison.png
 reproduction/PAS_*_OOD.json
 
+# Benchmark outputs (generated data)
+reproduction/benchmarks/*/subject_results/
+reproduction/benchmarks/*/tmp_adapter/
+reproduction/benchmarks/*/*.jsonl
+reproduction/benchmarks/*/*.json
+reproduction/benchmarks/prompt_morl/adapter/
+reproduction/benchmarks/soups/adapters/
+
 # Synthetic experiment outputs
 synthetic_HL/
 
