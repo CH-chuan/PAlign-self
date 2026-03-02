@@ -190,19 +190,19 @@ def lmean(l):
     return sum(l) / len(l)
 
 
-def setup_raw_logger():
+def setup_raw_logger(output_dir='./reproduction'):
     """Set up a dedicated file logger for raw model generations."""
-    os.makedirs('./reproduction', exist_ok=True)
+    os.makedirs(output_dir, exist_ok=True)
     raw_logger = logging.getLogger('raw_generations')
     raw_logger.setLevel(logging.INFO)
     if not raw_logger.handlers:
-        fh = logging.FileHandler('./reproduction/raw_generations.log', mode='a')
+        fh = logging.FileHandler(os.path.join(output_dir, 'raw_generations.log'), mode='a')
         fh.setFormatter(logging.Formatter('[%(asctime)s] %(message)s', datefmt='%Y-%m-%dT%H:%M:%S'))
         raw_logger.addHandler(fh)
     return raw_logger
 
 
-def process_pas(data, model, tokenizer, model_file):
+def process_pas(data, model, tokenizer, model_file, output_dir='./reproduction'):
     """
     Process data using Persona Activation Steering (PAS) method.
 
@@ -210,19 +210,20 @@ def process_pas(data, model, tokenizer, model_file):
     :param model: The language model to use
     :param tokenizer: The tokenizer for the model
     :param model_file: Path to the model file
+    :param output_dir: Directory for output files
     :return: List of results for each personality sample
     """
-    raw_logger = setup_raw_logger()
+    raw_logger = setup_raw_logger(output_dir)
 
     # Set up resume directories
-    os.makedirs('./reproduction/subject_results', exist_ok=True)
-    progress_path = './reproduction/pas_progress.jsonl'
+    os.makedirs(os.path.join(output_dir, 'subject_results'), exist_ok=True)
+    progress_path = os.path.join(output_dir, 'pas_progress.jsonl')
 
     # Load existing results for resume
     results = [None] * len(data)
     done_indices = set()
     for idx in range(len(data)):
-        pkl_path = f'./reproduction/subject_results/subject_{idx:04d}.pkl'
+        pkl_path = os.path.join(output_dir, 'subject_results', f'subject_{idx:04d}.pkl')
         if os.path.exists(pkl_path):
             with open(pkl_path, 'rb') as f:
                 results[idx] = pickle.load(f)
@@ -311,7 +312,7 @@ def process_pas(data, model, tokenizer, model_file):
         results[index] = rs
 
         # Save per-subject pickle for resume
-        pkl_path = f'./reproduction/subject_results/subject_{index:04d}.pkl'
+        pkl_path = os.path.join(output_dir, 'subject_results', f'subject_{index:04d}.pkl')
         with open(pkl_path, 'wb') as f:
             pickle.dump(rs, f)
 
@@ -336,7 +337,7 @@ def process_pas(data, model, tokenizer, model_file):
     return results
 
 
-def print_and_save_results(results, mode, model_file, dataset_set):
+def print_and_save_results(results, mode, model_file, dataset_set, output_dir='./reproduction'):
     """
     Print and save the final results of the personality assessment.
 
@@ -385,15 +386,15 @@ def print_and_save_results(results, mode, model_file, dataset_set):
     log['std'] = {'A': std_A, 'C': std_C, 'E': std_E, 'N': std_N, 'O': std_O}
 
     # Save the log to a file
-    os.makedirs('./reproduction', exist_ok=True)
-    log_filename = f'./reproduction/{mode}_{model_file.split("/")[-1]}_{dataset_set}.json'
+    os.makedirs(output_dir, exist_ok=True)
+    log_filename = os.path.join(output_dir, f'{mode}_{model_file.split("/")[-1]}_{dataset_set}.json')
     with open(log_filename, 'w', encoding='utf-8') as f:
         json.dump(log, f, ensure_ascii=False, indent=4)
 
     print(f"Results saved to {log_filename}")
 
 
-def main(mode=None, model_file='', model=None, tokenizer=None, dataset_set='OOD', num_subjects=0):
+def main(mode=None, model_file='', model=None, tokenizer=None, dataset_set='OOD', num_subjects=0, output_dir='./reproduction'):
     """
     Main function to run personality assessment.
     """
@@ -425,10 +426,10 @@ def main(mode=None, model_file='', model=None, tokenizer=None, dataset_set='OOD'
 
     elif mode == 'PAS':
         # Process data using PAS (Personality Assessment System)
-        results = process_pas(data, model, tokenizer, model_file)
+        results = process_pas(data, model, tokenizer, model_file, output_dir=output_dir)
 
     # Print and save final results
-    print_and_save_results(results, mode, model_file, dataset_set)
+    print_and_save_results(results, mode, model_file, dataset_set, output_dir=output_dir)
 
 
 if __name__ == "__main__":
@@ -438,11 +439,13 @@ if __name__ == "__main__":
     parser.add_argument("--modes", default='PAS', help="Assessment mode (PAS, NO_CHANGE, few-shot, personality_prompt)")
     parser.add_argument("--model_file", default='meta-llama/Meta-Llama-3-8B-Instruct', help="HuggingFace model name")
     parser.add_argument("--num_subjects", type=int, default=0, help="Number of subjects to process (0=all)")
+    parser.add_argument("--output_dir", default='./reproduction', help="Output directory for results")
     args = parser.parse_args()
 
     model_file = args.model_file
     modes = [args.modes]
     num_subjects = args.num_subjects
+    output_dir = args.output_dir
 
     model, tokenizer = get_model(model_file)
     if 'llama-3' in model_file.lower():
@@ -451,4 +454,4 @@ if __name__ == "__main__":
 
     for mode in modes:
         main(mode=mode, model_file=model_file, model=model, tokenizer=tokenizer,
-             dataset_set='OOD', num_subjects=num_subjects)
+             dataset_set='OOD', num_subjects=num_subjects, output_dir=output_dir)
