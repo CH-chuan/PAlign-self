@@ -24,12 +24,12 @@ set -euo pipefail
 : "${BATCH_SIZE:=16}"
 : "${PROJECT_DIR:=$(pwd)}"
 : "${OUTPUT_DIR:=${PROJECT_DIR}/reproduction}"
-: "${HF_HUB_CACHE:=/scratch/muh5jn/huggingface}"
+: "${HF_HOME:=/scratch/muh5jn/models}"
 : "${CONDA_ENV:=palign_repro}"
 
-export HF_HOME="${HF_HUB_CACHE}"
-export HF_HUB_CACHE
-export TRANSFORMERS_CACHE="${HF_HUB_CACHE}"
+export HF_HOME
+export HF_HUB_CACHE="${HF_HOME}/hub"
+export TRANSFORMERS_CACHE="${HF_HOME}/hub"
 
 echo "============================================"
 echo "Job:        ${SLURM_JOB_NAME} (${SLURM_JOB_ID})"
@@ -38,7 +38,7 @@ echo "Model:      ${MODEL_NAME}"
 echo "Subjects:   ${NUM_SUBJECTS} (0=all)"
 echo "Batch size: ${BATCH_SIZE}"
 echo "Output:     ${OUTPUT_DIR}"
-echo "HF cache:   ${HF_HUB_CACHE}"
+echo "HF_HOME:    ${HF_HOME}"
 echo "Node:       $(hostname)"
 echo "GPUs:       ${SLURM_GPUS_ON_NODE:-?}"
 echo "============================================"
