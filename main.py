@@ -8,7 +8,7 @@ from tqdm import tqdm, trange
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import re
 from pprint import pprint
-from PAlign.llama_pas import get_model
+from PAlign.pas import get_model
 from copy import deepcopy
 from baseline_utils import process_answers, process_few_shot, calc_mean_and_var, process_personality_prompt
 
@@ -55,7 +55,7 @@ def prompt_to_tokens(tokenizer, system_prompt, instruction, model_output, model_
                 {"role": "user", "content": instruction},
                 {"role": "assistant", "content": model_output}
             ]
-            return tokenizer.apply_chat_template(con)[:-5]
+            return tokenizer.apply_chat_template(con)[:-1]
         else:
             con = [
                 {"role": "system", "content": system_prompt},
@@ -92,7 +92,7 @@ def generateAnswer(tokenizer, model, dataset, template, scores=SCORES, system_pr
     """
     Generate answers using the model.
     """
-    batch_size = 3 if '70B' in model_file else 10
+    batch_size = 3
     questions = [item["text"].lower() for item in dataset]
     answers = []
 
@@ -105,7 +105,7 @@ def generateAnswer(tokenizer, model, dataset, template, scores=SCORES, system_pr
             )
             output_text = tokenizer.batch_decode(outputs)
             if 'llama-3' in model_file.lower():
-                answer = [text.split("<|end_header_id|>")[3] for text in output_text]
+                answer = [text.split("<|end_header_id|>")[-1] for text in output_text]
             else:
                 answer = [text.split("[/INST]")[-1] for text in output_text]
             answers.extend(answer)
@@ -238,8 +238,9 @@ def process_pas(data, model, tokenizer, model_file):
         activate = model.get_activations(deepcopy(head_wise_activations), labels, num_to_intervene=24)
 
         # Test different activation levels
+        alpha_values = [0, 1, 2, 4, 6, 8]
         result_cache = []
-        for num in [0, 1, 2, 4, 6, 8]:
+        for num in alpha_values:
             model.reset_all()
             model.set_activate(activate, num)
             answers = generateAnswer(tokenizer, model, data[0]['test'], TEMPLATE,
@@ -256,8 +257,9 @@ def process_pas(data, model, tokenizer, model_file):
             if str(score) == 'nan':
                 score = 1e6
             scores.append(score)
-        rs = result_cache[np.array(scores).argmin()]
-        rs['alpha'] = result_cache[np.array(scores).argmin()]
+        best_idx = int(np.array(scores).argmin())
+        rs = result_cache[best_idx]
+        rs['alpha'] = alpha_values[best_idx]
         results.append(rs)
 
     return results
@@ -312,7 +314,8 @@ def print_and_save_results(results, mode, model_file, dataset_set):
     log['std'] = {'A': std_A, 'C': std_C, 'E': std_E, 'N': std_N, 'O': std_O}
 
     # Save the log to a file
-    log_filename = f'./log/{mode}_{model_file.split("/")[-1]}_{dataset_set}.json'
+    os.makedirs('./reproduction', exist_ok=True)
+    log_filename = f'./reproduction/{mode}_{model_file.split("/")[-1]}_{dataset_set}.json'
     with open(log_filename, 'w', encoding='utf-8') as f:
         json.dump(log, f, ensure_ascii=False, indent=4)
 
@@ -354,9 +357,9 @@ def main(mode=None, model_file='', model=None, tokenizer=None, dataset_set='OOD'
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="mode")
-    parser.add_argument("--modes", default='PAS', help="Name of the user to greet")
-    parser.add_argument("--model_file", default='meta-llama/Meta-Llama-3-8B-Instruct', help="Name of the user to greet")
+    parser = argparse.ArgumentParser(description="Personality Alignment of LLMs")
+    parser.add_argument("--modes", default='PAS', help="Assessment mode (PAS, NO_CHANGE, few-shot, personality_prompt)")
+    parser.add_argument("--model_file", default='meta-llama/Meta-Llama-3-8B-Instruct', help="HuggingFace model name")
     args = parser.parse_args()
 
     model_file = args.model_file
