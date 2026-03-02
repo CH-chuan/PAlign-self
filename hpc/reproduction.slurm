@@ -5,14 +5,13 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
-#SBATCH --time=%TIME_LIMIT%
-#SBATCH --mem=%MEM%
-#SBATCH --gres=gpu:%GPU_COUNT%
-#SBATCH --constraint=%GPU_CONSTRAINT%
 #SBATCH --output=logs/reproduction/%x_%j.out
 #SBATCH --error=logs/reproduction/%x_%j.err
 #SBATCH --mail-type=END,FAIL
 #SBATCH --mail-user=muh5jn@virginia.edu
+
+# Dynamic directives are set via sbatch CLI flags:
+#   --time, --mem, --gres, --constraint, --job-name
 
 # ── Environment ──────────────────────────────────────────────────────
 set -euo pipefail

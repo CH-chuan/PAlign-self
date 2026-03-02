@@ -133,7 +133,7 @@ for method in "${METHODS[@]}"; do
         --job-name="repro_${method}"
         --time="${TIME_LIMIT}"
         --mem="${MEM}"
-        --gres="gpu:${GPU_COUNT}"
+        --gres="gpu:${GPU_TYPE}:${GPU_COUNT}"
         --constraint="${GPU_CONSTRAINT}"
         --export="ALL,METHOD=${method},MODEL_NAME=${MODEL_NAME},NUM_SUBJECTS=${NUM_SUBJECTS},OUTPUT_DIR=${OUTPUT_DIR},BATCH_SIZE=${BATCH_SIZE},PROJECT_DIR=${PROJECT_DIR}"
         "${SLURM_TEMPLATE}"
