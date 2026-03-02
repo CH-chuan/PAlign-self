@@ -42,9 +42,21 @@ echo "GPUs:       ${SLURM_GPUS_ON_NODE:-?}"
 echo "============================================"
 
 # Load modules and activate env
+# Note: conda's shell functions use unset variables internally,
+# so we must disable -u (nounset) around activation.
 module load miniforge
+set +u
 eval "$(conda shell.bash hook)"
 conda activate "${CONDA_ENV}"
+set -u
+
+# Verify activation worked
+echo "Python:     $(which python)"
+echo "Conda env:  ${CONDA_DEFAULT_ENV:-NOT SET}"
+python -c "import sys; print(f'sys.executable: {sys.executable}')" || {
+    echo "ERROR: conda env activation failed"
+    exit 1
+}
 
 cd "${PROJECT_DIR}"
 mkdir -p logs/reproduction
