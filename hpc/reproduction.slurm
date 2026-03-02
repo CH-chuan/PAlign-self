@@ -43,6 +43,7 @@ echo "============================================"
 
 # Load modules and activate env
 module load miniforge
+eval "$(conda shell.bash hook)"
 conda activate "${CONDA_ENV}"
 
 cd "${PROJECT_DIR}"
