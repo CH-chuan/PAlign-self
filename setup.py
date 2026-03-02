@@ -23,6 +23,7 @@ setup(
         'peft>=0.7.0',
         'safetensors>=0.7.0',
         'scikit-learn>=0.23.2',
+        'rich>=13.0',
         'torch>=2.5.1',
         'tqdm>=4.67.3',
         'transformers>=4.50,<5',

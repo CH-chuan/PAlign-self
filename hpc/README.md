@@ -37,7 +37,8 @@ python hpc/aggregate_reproduction.py
 
 ```bash
 # Submit specific methods
-./hpc/submit_reproduction.sh --method pas dpo ppo
+./hpc/submit_reproduction.sh --method few_shot_pas few_shot personality_prompt dpo ppo prompt_morl soups
+./hpc/submit_reproduction.sh --method pas
 
 # Override defaults
 ./hpc/submit_reproduction.sh --all --model meta-llama/Meta-Llama-3-8B-Instruct --num-subjects 10

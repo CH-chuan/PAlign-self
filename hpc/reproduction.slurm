@@ -28,7 +28,6 @@ set -euo pipefail
 
 export HF_HOME
 export HF_HUB_CACHE="${HF_HOME}/hub"
-export TRANSFORMERS_CACHE="${HF_HOME}/hub"
 
 echo "============================================"
 echo "Job:        ${SLURM_JOB_NAME} (${SLURM_JOB_ID})"
@@ -44,7 +43,6 @@ echo "============================================"
 
 # Load modules and activate env
 module load miniforge
-eval "$(conda shell.bash hook)"
 conda activate "${CONDA_ENV}"
 
 cd "${PROJECT_DIR}"
