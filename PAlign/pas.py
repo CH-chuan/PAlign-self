@@ -22,7 +22,7 @@ from einops import rearrange
 import pickle
 from functools import partial
 from torch.utils.data import Dataset
-from transformers import AutoTokenizer, AutoModelForCausalLM, AutoConfig
+from transformers import AutoTokenizer, AutoModelForCausalLM, AutoConfig, GenerationConfig
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
 from tqdm.rich import tqdm
@@ -132,6 +132,11 @@ def get_model(model_name='meta-llama/Llama-2-7b-chat-hf', use_bit_4=False, adapt
             pad_id = tokenizer.pad_token_id
 
             device = model.device
+            gc = model.model.generation_config or GenerationConfig.from_pretrained(model.model_file)
+            eos_ids = gc.eos_token_id or model.tokenizer.eos_token_id
+            if isinstance(eos_ids, int):
+                eos_ids = [eos_ids]
+            eos_ids_tensor = torch.tensor(eos_ids, device=device)
             input_ids = [t for t in text]
             min_prompt_len = min(len(t) for t in input_ids)
             max_prompt_len = max(len(t) for t in input_ids)
@@ -160,8 +165,11 @@ def get_model(model_name='meta-llama/Llama-2-7b-chat-hf', use_bit_4=False, adapt
                     next_token = torch.topk(logits['logits'][:, -1], 1, dim=-1)[1][:, -1]
                     next_token = next_token.reshape(-1)
                     next_token = torch.where(input_text_mask[:, cur_pos], tokens[:, cur_pos], next_token)
+                    # Replace generated tokens with pad for sequences that already hit EOS
+                    next_token = torch.where(eos_reached & ~input_text_mask[:, cur_pos],
+                                             torch.tensor(pad_id, device=device), next_token)
                     tokens[:, cur_pos] = next_token
-                    eos_reached |= (~input_text_mask[:, cur_pos]) & (next_token == model.tokenizer.eos_token_id)
+                    eos_reached |= (~input_text_mask[:, cur_pos]) & torch.isin(next_token, eos_ids_tensor)
 
                     if all(eos_reached):
                         break
