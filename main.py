@@ -422,11 +422,15 @@ def main(mode=None, model_file='', model=None, tokenizer=None, dataset_set='OOD'
 
     elif mode == 'few-shot':
         # Process data using few-shot learning
-        results = process_few_shot(data, model, tokenizer, model_file, batch_size=batch_size)
+        raw_logger = setup_raw_logger(output_dir)
+        results = process_few_shot(data, model, tokenizer, model_file, batch_size=batch_size,
+                                   output_dir=output_dir, raw_logger=raw_logger)
 
     elif mode == 'personality_prompt':
         # Process data using personality prompts
-        results = process_personality_prompt(data, model, tokenizer, model_file, batch_size=batch_size)
+        raw_logger = setup_raw_logger(output_dir)
+        results = process_personality_prompt(data, model, tokenizer, model_file, batch_size=batch_size,
+                                             output_dir=output_dir, raw_logger=raw_logger)
 
     elif mode in ('PAS', 'few-shot-PAS'):
         # Process data using PAS (Personality Assessment System)

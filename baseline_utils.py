@@ -1,6 +1,9 @@
 import json
+import os
+import pickle
 import re
 import numpy as np
+from datetime import datetime
 from tqdm import tqdm
 
 # Constants (you might want to import these from a common config file)
@@ -78,32 +81,104 @@ def process_answers(answers,sample):
     return result_file
 
 
-def process_few_shot(data, model, tokenizer, model_file, batch_size=16):
+def process_few_shot(data, model, tokenizer, model_file, batch_size=16,
+                     output_dir=None, raw_logger=None):
     """
     Process data using few-shot learning method.
     """
     from main import generateAnswer, TEMPLATE
-    results = []
-    for i in tqdm(data):
+
+    # Resume setup
+    results = [None] * len(data)
+    done_indices = set()
+    if output_dir:
+        results_dir = os.path.join(output_dir, 'subject_results')
+        os.makedirs(results_dir, exist_ok=True)
+        progress_path = os.path.join(output_dir, 'few-shot_progress.jsonl')
+        for idx in range(len(data)):
+            pkl_path = os.path.join(results_dir, f'subject_{idx:04d}.pkl')
+            if os.path.exists(pkl_path):
+                with open(pkl_path, 'rb') as f:
+                    results[idx] = pickle.load(f)
+                done_indices.add(idx)
+        if done_indices:
+            print(f"Resuming: {len(done_indices)} subjects already completed, skipping them.")
+
+    for index, i in enumerate(tqdm(data)):
+        if index in done_indices:
+            continue
+
         system_prompt_text = 'Here are some of your behaviors and your level of recognition towards them' + \
                              ';'.join([f"{it['text']}:{SCORES_BACK[it['value']]}" for it in i['train']])
         answers = generateAnswer(tokenizer, model, i['test'], TEMPLATE, scores=SCORES,
                                   system_prompt=system_prompt_text, model_file=model_file,
-                                  batch_size=batch_size)
-        results.append(process_answers(answers, i))
-    return results
+                                  raw_logger=raw_logger, batch_size=batch_size)
+        rs = process_answers(answers, i)
+        results[index] = rs
+
+        # Save pickle + progress
+        if output_dir:
+            pkl_path = os.path.join(results_dir, f'subject_{index:04d}.pkl')
+            with open(pkl_path, 'wb') as f:
+                pickle.dump(rs, f)
+            progress_entry = {
+                'index': index,
+                'case': rs['case'],
+                'mean_abs': {k: v for k, v in rs['mean_ver_abs']['mean']},
+                'timestamp': datetime.now().isoformat()
+            }
+            with open(progress_path, 'a') as f:
+                f.write(json.dumps(progress_entry) + '\n')
+
+    return [r for r in results if r is not None]
 
 
-def process_personality_prompt(data, model, tokenizer, model_file, batch_size=16):
+def process_personality_prompt(data, model, tokenizer, model_file, batch_size=16,
+                               output_dir=None, raw_logger=None):
     """
     Process data using personality prompts method.
     """
     from main import generateAnswer, TEMPLATE
     system_prompt = json.load(open('PAPI/personality_prompt.json'))
-    results = []
+
+    # Resume setup
+    results = [None] * len(data)
+    done_indices = set()
+    if output_dir:
+        results_dir = os.path.join(output_dir, 'subject_results')
+        os.makedirs(results_dir, exist_ok=True)
+        progress_path = os.path.join(output_dir, 'personality_prompt_progress.jsonl')
+        for idx in range(len(data)):
+            pkl_path = os.path.join(results_dir, f'subject_{idx:04d}.pkl')
+            if os.path.exists(pkl_path):
+                with open(pkl_path, 'rb') as f:
+                    results[idx] = pickle.load(f)
+                done_indices.add(idx)
+        if done_indices:
+            print(f"Resuming: {len(done_indices)} subjects already completed, skipping them.")
+
     for index, i in enumerate(tqdm(data)):
+        if index in done_indices:
+            continue
+
         system_prompt_text = system_prompt[index]['output'][0]
         answers = generateAnswer(tokenizer, model, i['test'], TEMPLATE, system_prompt=system_prompt_text,
-                                 model_file=model_file, batch_size=batch_size)
-        results.append(process_answers(answers, i))
-    return results
+                                 model_file=model_file, raw_logger=raw_logger, batch_size=batch_size)
+        rs = process_answers(answers, i)
+        results[index] = rs
+
+        # Save pickle + progress
+        if output_dir:
+            pkl_path = os.path.join(results_dir, f'subject_{index:04d}.pkl')
+            with open(pkl_path, 'wb') as f:
+                pickle.dump(rs, f)
+            progress_entry = {
+                'index': index,
+                'case': rs['case'],
+                'mean_abs': {k: v for k, v in rs['mean_ver_abs']['mean']},
+                'timestamp': datetime.now().isoformat()
+            }
+            with open(progress_path, 'a') as f:
+                f.write(json.dumps(progress_entry) + '\n')
+
+    return [r for r in results if r is not None]
