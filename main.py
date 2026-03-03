@@ -114,6 +114,9 @@ def generateAnswer(tokenizer, model, dataset, template, scores=SCORES, system_pr
             if raw_logger:
                 for i, ans in enumerate(answer):
                     raw_logger.info(f"q={len(answers) + i} | {ans.strip()}")
+            # now we can remove those special tokens like <|eot_id|> or <|end_of_text|>
+            try: answer = answer.split("<|eot_id|>")[0] 
+            except: pass
             answers.extend(answer)
 
     return answers
