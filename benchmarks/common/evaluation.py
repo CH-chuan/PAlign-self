@@ -91,13 +91,13 @@ def generate_answers(model, tokenizer, test_items, model_name,
         output_text = tokenizer.batch_decode(outputs, skip_special_tokens=False)
 
         for text in output_text:
-            # Extract the last assistant response
+            # Extract the first assistant response (forward index avoids hallucinated second turns)
             if '<|end_header_id|>' in text:
-                answer = text.split("<|end_header_id|>")[-1]
+                answer = text.split("<|end_header_id|>")[3]
             elif '<|im_start|>assistant' in text:
-                answer = text.split("<|im_start|>assistant")[-1]
+                answer = text.split("<|im_start|>assistant")[1]
             elif '[/INST]' in text:
-                answer = text.split("[/INST]")[-1]
+                answer = text.split("[/INST]")[1]
             else:
                 answer = text
             answers.append(answer)

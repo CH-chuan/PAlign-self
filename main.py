@@ -108,7 +108,7 @@ def generateAnswer(tokenizer, model, dataset, template, scores=SCORES, system_pr
             )
             output_text = tokenizer.batch_decode(outputs)
             if 'llama-3' in model_file.lower():
-                answer = [text.split("<|end_header_id|>")[-1] for text in output_text]
+                answer = [text.split("<|end_header_id|>")[3] for text in output_text]
             else:
                 answer = [text.split("[/INST]")[-1] for text in output_text]
             if raw_logger:
