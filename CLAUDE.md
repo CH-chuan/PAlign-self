@@ -28,6 +28,41 @@ python main.py --modes PAS --model_file meta-llama/Meta-Llama-3-8B-Instruct --nu
 Interrupted runs resume automatically from pickle files in `reproduction/subject_results/`.
 Output: `reproduction/PAS_Meta-Llama-3-8B-Instruct_OOD.json`
 
+### Oracle PAS (Pre-determined Alpha + Full-Data Probes)
+
+Variant of PAS that leverages prior runs to skip the 6-alpha sweep and improve probe quality. Uses a pre-determined alpha from prior runs and trains probes on all 300 items (train + test) instead of just 120 train items. Reduces runtime from ~35 hours to ~8 hours for 300 subjects.
+
+```bash
+# Analysis only (no GPU) — print alpha consistency report
+python oracle_pas.py --analyze_only \
+  --result_dirs reproduction/run1 reproduction/run2 reproduction/run3
+
+# Full run with majority-vote alpha
+python oracle_pas.py \
+  --result_dirs reproduction/run1 reproduction/run2 reproduction/run3 \
+  --alpha_strategy majority \
+  --model_file meta-llama/Meta-Llama-3-8B-Instruct \
+  --num_subjects 0 --batch_size 3 --eval_set both
+
+# Full run with best-MAE alpha
+python oracle_pas.py \
+  --result_dirs reproduction/run1 reproduction/run2 reproduction/run3 \
+  --alpha_strategy best_mae --num_subjects 0
+
+# Quick test (5 subjects)
+python oracle_pas.py \
+  --result_dirs reproduction/run1 reproduction/run2 reproduction/run3 \
+  --alpha_strategy majority --num_subjects 5
+```
+
+Alpha strategies: `majority` (most common alpha across runs, ties → lowest) or `best_mae` (alpha from the run with the smallest MAE sum).
+
+Output:
+- `reproduction/oracle_pas/subject_results/subject_XXXX.pkl` — per-subject results
+- `reproduction/oracle_pas/Oracle-PAS-{strategy}_{model}_OOD.json` — OOD-180 metrics
+- `reproduction/oracle_pas/Oracle-PAS-{strategy}_{model}_ALL.json` — ALL-300 metrics
+- `reproduction/oracle_pas/oracle_pas_progress.jsonl` — progress log
+
 ### Benchmarking Baselines
 
 Six comparison methods from the paper's Table 1. Two black-box baselines run via `main.py`; four white-box training-based methods run via `benchmarks/`.
