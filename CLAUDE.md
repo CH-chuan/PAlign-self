@@ -175,7 +175,7 @@ This steers model behavior toward the target personality profile without fine-tu
 ## Key Dependencies
 
 Core: `torch`, `transformers` (>=4.50), `baukit`, `einops`, `scikit-learn`, `numpy`, `pandas`
-Benchmarks: `peft` (>=0.7), `trl` (>=0.11, <0.20), `bitsandbytes` (>=0.43), `accelerate` (>=0.27), `datasets`
+Benchmarks: `peft` (>=0.7), `trl` (>=0.11, <0.12), `bitsandbytes` (>=0.43), `accelerate` (>=0.27), `datasets`
 
 ## Data
 

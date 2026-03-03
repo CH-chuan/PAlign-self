@@ -17,7 +17,7 @@ echo "=== Installing PAlign + all dependencies ==="
 pip install .
 
 echo "=== Installing benchmark dependencies ==="
-pip install "peft>=0.7" "trl>=0.11,<0.20" "bitsandbytes>=0.43" "accelerate>=0.27" datasets
+pip install "peft>=0.7" "trl>=0.11,<0.12" "bitsandbytes>=0.43" "accelerate>=0.27" datasets
 
 echo "=== Verifying key packages ==="
 python -c "import torch; print(f'torch {torch.__version__}, CUDA {torch.cuda.is_available()}')"
