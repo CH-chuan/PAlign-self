@@ -27,7 +27,7 @@ setup(
         'torch>=2.5.1',
         'tqdm>=4.67.3',
         'transformers>=4.50,<5',
-        'trl>=0.7.0,<0.29.0',
+        'trl>=0.11.0,<0.20.0',
         'xlrd>=2.0.2',
     ],
     classifiers=[
