@@ -37,11 +37,14 @@ python hpc/aggregate_reproduction.py
 
 ```bash
 # Submit specific methods
-./hpc/submit_reproduction.sh --method few_shot_pas few_shot personality_prompt dpo ppo prompt_morl soups
-./hpc/submit_reproduction.sh --method pas
+./hpc/submit_reproduction.sh --method pas few_shot_pas few_shot personality_prompt 
+./hpc/submit_reproduction.sh --method dpo ppo prompt_morl soups
 
 # Override defaults
 ./hpc/submit_reproduction.sh --all --model meta-llama/Meta-Llama-3-8B-Instruct --num-subjects 10
+
+# Custom output directory (default: reproduction/)
+./hpc/submit_reproduction.sh --all --output-dir reproduction_v2
 
 # Preview without submitting
 ./hpc/submit_reproduction.sh --all --dry-run
