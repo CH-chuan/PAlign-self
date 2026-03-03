@@ -7,12 +7,8 @@ __pycache__/
 papers/
 
 # Reproduction outputs (generated data)
-reproduction/subject_results/
-reproduction/raw_generations.log
-reproduction/pas_progress.jsonl
-reproduction/full_run.log
-reproduction/scatter_comparison.png
-reproduction/PAS_*_OOD.json
+reproduction*
+synthetic_HL*
 
 # Benchmark outputs (generated data)
 reproduction/benchmarks/*/subject_results/
