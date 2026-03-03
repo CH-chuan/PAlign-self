@@ -57,6 +57,11 @@ def generate_answers(model, tokenizer, test_items, model_name,
     answers = []
 
     model.eval()
+    eos_token_ids = getattr(model, 'generation_config', None) and model.generation_config.eos_token_id
+    if not eos_token_ids:
+        eos_token_ids = getattr(model.config, 'eos_token_id', None) or tokenizer.eos_token_id
+    if isinstance(eos_token_ids, int):
+        eos_token_ids = [eos_token_ids]
     for batch_start in range(0, len(questions), batch_size):
         batch_questions = questions[batch_start:batch_start + batch_size]
         input_ids_list = [
@@ -84,8 +89,9 @@ def generate_answers(model, tokenizer, test_items, model_name,
             outputs = model.generate(
                 input_ids=input_ids,
                 attention_mask=attention_mask,
-                max_new_tokens=15,
+                max_new_tokens=10,
                 do_sample=False,
+                eos_token_id=eos_token_ids,
             )
 
         output_text = tokenizer.batch_decode(outputs, skip_special_tokens=False)

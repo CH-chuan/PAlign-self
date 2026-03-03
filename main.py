@@ -104,7 +104,7 @@ def generateAnswer(tokenizer, model, dataset, template, scores=SCORES, system_pr
             outputs = model.generate(
                 [prompt_to_tokens(tokenizer, system_prompt, template.format(prompt), 'Option', model_file) # force first output to be Option
                  for prompt in questions[batch:batch + batch_size]],
-                max_new_tokens=15,
+                max_new_tokens=10,
             )
             output_text = tokenizer.batch_decode(outputs)
             if 'llama-3' in model_file.lower():
