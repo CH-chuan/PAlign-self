@@ -22,14 +22,40 @@ from einops import rearrange
 import pickle
 from functools import partial
 from torch.utils.data import Dataset
-from transformers import AutoTokenizer, AutoModelForCausalLM, AutoConfig, GenerationConfig
+from transformers import AutoTokenizer, AutoModelForCausalLM, GenerationConfig
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
 from tqdm.rich import tqdm
 import matplotlib
-from baukit import Trace, TraceDict
-
 from copy import deepcopy
+
+
+class _ModuleInputCapture:
+    """Capture inputs to named submodules via forward pre-hooks."""
+
+    def __init__(self, model, layer_names):
+        self._handles, self._outputs = [], {}
+        modules = dict(model.named_modules())
+        for name in layer_names:
+            self._handles.append(
+                modules[name].register_forward_pre_hook(self._make_hook(name))
+            )
+
+    def _make_hook(self, name):
+        def hook(module, args):
+            self._outputs[name] = args[0]
+        return hook
+
+    def __enter__(self):
+        return self
+
+    def __getitem__(self, key):
+        return self._outputs[key]
+
+    def __exit__(self, *args):
+        for h in self._handles:
+            h.remove()
+
 
 def get_model(model_name='meta-llama/Llama-2-7b-chat-hf', use_bit_4=False, adapter=None):
     """
@@ -54,13 +80,7 @@ def get_model(model_name='meta-llama/Llama-2-7b-chat-hf', use_bit_4=False, adapt
         """
         def __init__(self):
             self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-            self.config = AutoConfig.from_pretrained(model_name)
-            if self.config.architectures[0] == 'MistralForCausalLM':
-                from PAlign.modeling_mistral import MistralForCausalLM as ModelForCausalLM
-            elif self.config.architectures[0] == 'LlamaForCausalLM':
-                from PAlign.modeling_llama import LlamaForCausalLM as ModelForCausalLM
-            else:
-                print('PAS not implemented yet for {}.'.format(self.config.architectures[0]))
+            ModelForCausalLM = AutoModelForCausalLM
 
             if adapter:
                 if 'ppo' in adapter:
@@ -104,10 +124,10 @@ def get_model(model_name='meta-llama/Llama-2-7b-chat-hf', use_bit_4=False, adapt
             """
             Loads the standard variant of the Meta-LLaMA model.
             """
-            if 'ppo' in model_name:
-                self.model = ModelForCausalLM.from_pretrained(model_name, device_map='cuda')
-            else:
-                self.model = ModelForCausalLM.from_pretrained(model_name).half().cuda()
+            num_gpus = torch.cuda.device_count()
+            dmap = "auto" if num_gpus > 1 else "cuda"
+            self.model = ModelForCausalLM.from_pretrained(
+                model_name, dtype="auto", device_map=dmap, low_cpu_mem_usage=True)
             if adapter:
                 self.model.load_adapter(adapter)
             self.model.eval()
@@ -210,7 +230,7 @@ def get_model(model_name='meta-llama/Llama-2-7b-chat-hf', use_bit_4=False, adapt
             for i, layer in enumerate(self.model.model.layers):
                 self.model.model.layers[i].self_attn.o_proj.bias = self.bias_cache[i]
 
-        def get_activations(self, all_head_wise_activations, labels, num_to_intervene=48):
+        def get_activations(self, all_head_wise_activations, labels, num_to_intervene=48, val_ratio=0.4):
             """
             Gets the activations for the model based on the given head-wise activations and labels.
 
@@ -239,8 +259,9 @@ def get_model(model_name='meta-llama/Llama-2-7b-chat-hf', use_bit_4=False, adapt
                 train_idxs = np.arange(len(separated_labels))
 
                 # pick a val set using numpy
-                train_set_idxs = np.random.choice(train_idxs, size=int(len(train_idxs) * (1 - 0.4)),
-                                                  replace=False)
+                rng = np.random.RandomState(42)
+                train_set_idxs = rng.choice(train_idxs, size=int(len(train_idxs) * (1 - val_ratio)),
+                                            replace=False)
                 val_set_idxs = np.array([x for x in train_idxs if x not in train_set_idxs])
 
                 all_X_train = np.array([separated_head_wise_activations[i] for i in train_set_idxs])
@@ -273,7 +294,7 @@ def get_model(model_name='meta-llama/Llama-2-7b-chat-hf', use_bit_4=False, adapt
 
                 interventions = {}
                 for layer, head in top_heads:
-                    interventions[f"model.layers.{layer}.self_attn.head_out"] = []
+                    interventions[f"model.layers.{layer}.self_attn.o_proj"] = []
                 for layer, head in top_heads:
                     if com_directions is not None:
                         direction = com_directions[layer_head_to_flattened_idx(layer, head, num_heads)]
@@ -283,11 +304,11 @@ def get_model(model_name='meta-llama/Llama-2-7b-chat-hf', use_bit_4=False, adapt
                     activations = tuning_activations[:, layer, head, :]  # batch x 128
                     proj_vals = activations @ direction.T
                     proj_val_std = np.std(proj_vals)
-                    interventions[f"model.layers.{layer}.self_attn.head_out"].append(
+                    interventions[f"model.layers.{layer}.self_attn.o_proj"].append(
                         (head, direction.squeeze(), proj_val_std))
                 for layer, head in top_heads:
-                    interventions[f"model.layers.{layer}.self_attn.head_out"] = sorted(
-                        interventions[f"model.layers.{layer}.self_attn.head_out"], key=lambda x: x[0])
+                    interventions[f"model.layers.{layer}.self_attn.o_proj"] = sorted(
+                        interventions[f"model.layers.{layer}.self_attn.o_proj"], key=lambda x: x[0])
 
                 return interventions
 
@@ -382,21 +403,18 @@ def get_model(model_name='meta-llama/Llama-2-7b-chat-hf', use_bit_4=False, adapt
                 return all_prompts
 
             def get_llama_activations_bau(model, prompt):
-                HEADS = [f"model.layers.{i}.self_attn.head_out" for i in range(model.config.num_hidden_layers)]
-                MLPS = [f"model.layers.{i}.mlp" for i in range(model.config.num_hidden_layers)]
+                HEADS = [f"model.layers.{i}.self_attn.o_proj" for i in range(model.config.num_hidden_layers)]
 
                 with torch.no_grad():
                     prompt = prompt.to(model.device)
-                    with TraceDict(model, HEADS + MLPS) as ret:
+                    with _ModuleInputCapture(model, HEADS) as ret:
                         output = model(prompt, output_hidden_states=True)
                     hidden_states = output.hidden_states
                     hidden_states = torch.stack(hidden_states, dim=0).squeeze().to(torch.float16).detach().cpu().numpy()
-                    head_wise_hidden_states = [ret[head].output.squeeze().to(torch.float16).detach().cpu() for head in HEADS]
+                    head_wise_hidden_states = [ret[head].squeeze().to(torch.float16).detach().cpu() for head in HEADS]
                     head_wise_hidden_states = torch.stack(head_wise_hidden_states, dim=0).squeeze().numpy()
-                    mlp_wise_hidden_states = [ret[mlp].output.squeeze().to(torch.float16).detach().cpu() for mlp in MLPS]
-                    mlp_wise_hidden_states = torch.stack(mlp_wise_hidden_states, dim=0).squeeze().numpy()
 
-                return hidden_states, head_wise_hidden_states, mlp_wise_hidden_states
+                return hidden_states, head_wise_hidden_states
 
             prompts = data_preprocess(dataset)
 
@@ -404,7 +422,7 @@ def get_model(model_name='meta-llama/Llama-2-7b-chat-hf', use_bit_4=False, adapt
             all_head_wise_activations = []
 
             for prompt in tqdm(prompts):
-                layer_wise_activation, head_wise_activation, _ = get_llama_activations_bau(self.model, prompt)
+                layer_wise_activation, head_wise_activation = get_llama_activations_bau(self.model, prompt)
                 all_layer_wise_activations.append(layer_wise_activation[:, -1, :])
                 all_head_wise_activations.append(head_wise_activation[:, -1, :])
 
@@ -421,17 +439,18 @@ def get_model(model_name='meta-llama/Llama-2-7b-chat-hf', use_bit_4=False, adapt
             num_layers = self.model.model.config.num_hidden_layers
             num_heads = self.model.model.config.num_attention_heads
 
+            head_dim = getattr(self.model.model.config, 'head_dim',
+                               self.model.model.config.hidden_size // num_heads)
             for head_out_name, list_int_vec in interventions.items():
                 layer_no = int(head_out_name.split('.')[2])
-                displacement = np.zeros((num_heads, int(self.model.model.config.hidden_size / num_heads)))
+                displacement = np.zeros((num_heads, head_dim))
                 for head_no, head_vec, std in list_int_vec:
                     displacement[head_no] = alpha * std * head_vec
-                device = self.model.model.layers[layer_no].self_attn.o_proj.weight.device.index
+                weight = (self.weight_cache[layer_no] if hasattr(self, 'weight_cache')
+                          else self.model.model.layers[layer_no].self_attn.o_proj.weight)
+                device = weight.device
                 displacement = torch.tensor(rearrange(displacement, 'h d -> (h d)'), device=device)
-                if '70B' in self.model_file:
-                    bias_tobe = F.linear(displacement.to(torch.bfloat16), self.weight_cache[layer_no]).to(device)
-                else:
-                    bias_tobe = F.linear(displacement.to(torch.float16), self.model.model.layers[layer_no].self_attn.o_proj.weight).to(device)
+                bias_tobe = F.linear(displacement.to(weight.dtype), weight)
                 self.model.model.layers[layer_no].self_attn.o_proj.bias = torch.nn.parameter.Parameter(bias_tobe)
 
     model = PASLM()

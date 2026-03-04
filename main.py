@@ -462,7 +462,7 @@ if __name__ == "__main__":
     batch_size = args.batch_size
 
     model, tokenizer = get_model(model_file)
-    if 'llama-3' in model_file.lower():
+    if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
         tokenizer.padding_side = 'left'
 

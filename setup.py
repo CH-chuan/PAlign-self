@@ -10,7 +10,6 @@ setup(
     packages=find_packages(),
     install_requires=[
         'accelerate>=0.27.0',
-        'baukit @ git+https://github.com/davidbau/baukit.git@9d51abd51ebf29769aecc38c4cbef459b731a36e',
         'bitsandbytes>=0.43.0',
         'datasets',
         'einops>=0.8.2',
