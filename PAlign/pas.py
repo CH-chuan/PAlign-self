@@ -111,7 +111,8 @@ def get_model(model_name='meta-llama/Llama-2-7b-chat-hf'):
             tokens: Generated tokens.
             """
             tokenizer = model.tokenizer
-            tokenizer.pad_token = tokenizer.eos_token
+            if tokenizer.pad_token is None:
+                tokenizer.pad_token = tokenizer.eos_token
             stop_id = tokenizer.sep_token_id
             pad_id = tokenizer.pad_token_id
 
@@ -330,26 +331,19 @@ def get_model(model_name='meta-llama/Llama-2-7b-chat-hf'):
             self.system_prompt = system_prompt
 
             def prompt_to_tokens(tokenizer, system_prompt, instruction, model_output):
-                if 'llama-3' in self.model_file.lower():
-                    if model_output:
-                        con = [
-                            {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": instruction},
-                            {"role": "assistant", "content": model_output}
-                        ]
-                        return torch.tensor(_chat_ids(tokenizer, con)[:-1]).unsqueeze(0)
-                    else:
-                        con = [
-                            {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": instruction},
-                        ]
-                        return torch.tensor(_chat_ids(tokenizer, con)).unsqueeze(0)
+                if model_output:
+                    con = [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": instruction},
+                        {"role": "assistant", "content": model_output}
+                    ]
+                    return torch.tensor(_chat_ids(tokenizer, con)[:-1]).unsqueeze(0)
                 else:
-                    B_INST, E_INST = "[INST]", "[/INST]"
-                    B_SYS, E_SYS = "<<SYS>>\n", "\n<</SYS>>\n\n"
-                    dialog_content = B_SYS + system_prompt + E_SYS + instruction.strip()
-                    dialog_tokens = f"{B_INST} {dialog_content.strip()} {E_INST} {model_output.strip()}"
-                    return torch.tensor(tokenizer(dialog_tokens).input_ids).unsqueeze(0)
+                    con = [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": instruction},
+                    ]
+                    return torch.tensor(_chat_ids(tokenizer, con)).unsqueeze(0)
 
             def data_preprocess(dataset):
                 all_prompts = []
@@ -414,6 +408,9 @@ def get_model(model_name='meta-llama/Llama-2-7b-chat-hf'):
                 device = weight.device
                 displacement = torch.tensor(rearrange(displacement, 'h d -> (h d)'), device=device)
                 bias_tobe = F.linear(displacement.to(weight.dtype), weight)
+                original_bias = self.bias_cache[layer_no]
+                if original_bias is not None:
+                    bias_tobe = bias_tobe + original_bias.to(device=device, dtype=bias_tobe.dtype)
                 self.model.model.layers[layer_no].self_attn.o_proj.bias = torch.nn.parameter.Parameter(bias_tobe)
 
     model = PASLM()

@@ -103,6 +103,8 @@ def generate_answers(model, tokenizer, test_items, model_name,
                 answer = text.split("<|end_header_id|>")[3]
             elif '<|im_start|>assistant' in text:
                 answer = text.split("<|im_start|>assistant")[1]
+            elif '<|channel|>final<|message|>' in text:
+                answer = text.split('<|channel|>final<|message|>')[-1]
             elif '[/INST]' in text:
                 answer = text.split("[/INST]")[1]
             else:

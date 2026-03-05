@@ -50,28 +50,21 @@ Options:
 
 def prompt_to_tokens(tokenizer, system_prompt, instruction, model_output, model_file):
     """
-    Convert prompts to tokens based on the model type.
+    Convert prompts to tokens using apply_chat_template (model-agnostic).
     """
-    if 'llama-3' in model_file.lower():
-        if model_output:
-            con = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": instruction},
-                {"role": "assistant", "content": model_output}
-            ]
-            return _chat_ids(tokenizer, con)[:-1]
-        else:
-            con = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": instruction},
-            ]
-            return _chat_ids(tokenizer, con)
+    if model_output:
+        con = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": instruction},
+            {"role": "assistant", "content": model_output}
+        ]
+        return _chat_ids(tokenizer, con)[:-1]
     else:
-        B_INST, E_INST = "[INST]", "[/INST]"
-        B_SYS, E_SYS = "<<SYS>>\n", "\n<</SYS>>\n\n"
-        dialog_content = B_SYS + system_prompt + E_SYS + instruction.strip()
-        dialog_tokens = f"{B_INST} {dialog_content.strip()} {E_INST} {model_output.strip()}"
-        return tokenizer(dialog_tokens).input_ids
+        con = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": instruction},
+        ]
+        return _chat_ids(tokenizer, con)
 
 
 def getItems(filename):
@@ -107,17 +100,20 @@ def generateAnswer(tokenizer, model, dataset, template, scores=SCORES, system_pr
                 max_new_tokens=10,
             )
             output_text = tokenizer.batch_decode(outputs)
-            if 'llama-3' in model_file.lower():
-                answer = [text.split("<|end_header_id|>")[3] for text in output_text]
-            else:
-                answer = [text.split("[/INST]")[-1] for text in output_text]
-            if raw_logger:
-                for i, ans in enumerate(answer):
-                    raw_logger.info(f"q={len(answers) + i} | {ans.strip()}")
-            # now we can remove those special tokens like <|eot_id|> or <|end_of_text|>
-            try: answer = answer.split("<|eot_id|>")[0] 
-            except: pass
-            answers.extend(answer)
+            for text in output_text:
+                if '<|end_header_id|>' in text:
+                    ans = text.split("<|end_header_id|>")[3]
+                elif '<|im_start|>assistant' in text:
+                    ans = text.split("<|im_start|>assistant")[-1].lstrip('\n')
+                elif '<|channel|>final<|message|>' in text:
+                    ans = text.split('<|channel|>final<|message|>')[-1]
+                elif '[/INST]' in text:
+                    ans = text.split("[/INST]")[-1]
+                else:
+                    ans = text
+                if raw_logger:
+                    raw_logger.info(f"q={len(answers)} | {ans.strip()}")
+                answers.append(ans)
 
     return answers
 
