@@ -10,7 +10,6 @@ setup(
     packages=find_packages(),
     install_requires=[
         'accelerate>=0.27.0',
-        'bitsandbytes>=0.43.0',
         'datasets',
         'einops>=0.8.2',
         'huggingface_hub>=0.36.2',
@@ -25,7 +24,7 @@ setup(
         'rich>=13.0',
         'torch>=2.5.1',
         'tqdm>=4.67.3',
-        'transformers>=4.50,<5',
+        'transformers>=4.50',
         'trl>=0.11.0,<0.12.0',
         'xlrd>=2.0.2',
     ],

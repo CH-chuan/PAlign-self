@@ -8,6 +8,7 @@ import numpy as np
 import torch
 
 from benchmarks.common.config import SCORES, TEMPLATE, SYSTEM_PROMPT
+from PAlign.pas import _chat_ids
 
 
 def setup_raw_logger(output_dir):
@@ -34,7 +35,7 @@ def prompt_to_tokens_hf(tokenizer, system_prompt, instruction, model_output, mod
     if model_output:
         messages.append({"role": "assistant", "content": model_output})
 
-    token_ids = tokenizer.apply_chat_template(messages, add_generation_prompt=not model_output)
+    token_ids = _chat_ids(tokenizer, messages, add_generation_prompt=not model_output)
 
     # Trim the trailing EOS if model_output is provided (for forced prefix)
     if model_output:

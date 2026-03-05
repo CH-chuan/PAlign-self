@@ -202,7 +202,8 @@ def get_llama(prompt_text):
         tokenizer.eos_token_id,
         tokenizer.convert_tokens_to_ids("<|eot_id|>")
     ]
-    input_ids = tokenizer.apply_chat_template(data['dialogs'], padding=True, return_tensors='pt').to(0)
+    enc = tokenizer.apply_chat_template(data['dialogs'], padding=True, return_tensors='pt')
+    input_ids = (enc['input_ids'] if isinstance(enc, dict) else enc).to(0)
     results = model.generate(input_ids, max_new_tokens=data['max_gen_len'], temperature=data['temperature'], eos_token_id=terminators)
     outputs = [i.split('<|eot_id|>')[0] for i in tokenizer.batch_decode(results[:,len(input_ids[0]):])]
 

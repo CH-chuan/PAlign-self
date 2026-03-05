@@ -11,7 +11,7 @@ from tqdm import tqdm, trange
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import re
 from pprint import pprint
-from PAlign.pas import get_model
+from PAlign.pas import get_model, _chat_ids
 from copy import deepcopy
 from baseline_utils import process_answers, process_few_shot, calc_mean_and_var, process_personality_prompt
 
@@ -59,13 +59,13 @@ def prompt_to_tokens(tokenizer, system_prompt, instruction, model_output, model_
                 {"role": "user", "content": instruction},
                 {"role": "assistant", "content": model_output}
             ]
-            return tokenizer.apply_chat_template(con)[:-1]
+            return _chat_ids(tokenizer, con)[:-1]
         else:
             con = [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": instruction},
             ]
-            return tokenizer.apply_chat_template(con)
+            return _chat_ids(tokenizer, con)
     else:
         B_INST, E_INST = "[INST]", "[/INST]"
         B_SYS, E_SYS = "<<SYS>>\n", "\n<</SYS>>\n\n"

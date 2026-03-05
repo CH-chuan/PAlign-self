@@ -30,6 +30,14 @@ import matplotlib
 from copy import deepcopy
 
 
+def _chat_ids(tokenizer, messages, **kwargs):
+    """v4/v5 compat: apply_chat_template returning plain input_ids list."""
+    out = tokenizer.apply_chat_template(messages, **kwargs)
+    if isinstance(out, list):
+        return out
+    return out.input_ids
+
+
 class _ModuleInputCapture:
     """Capture inputs to named submodules via forward pre-hooks."""
 
@@ -57,16 +65,12 @@ class _ModuleInputCapture:
             h.remove()
 
 
-def get_model(model_name='meta-llama/Llama-2-7b-chat-hf', use_bit_4=False, adapter=None):
+def get_model(model_name='meta-llama/Llama-2-7b-chat-hf'):
     """
     Loads and sets up the Meta-LLaMA model for inference and activation handling.
 
     Args:
     model_name (str): Name of the model to load.
-    control_activate_name (str): Name of the control activation (optional).
-    control_layer (str): Specific layer to control (optional).
-    gamma (float): Gamma value for model control (optional).
-    adapter (str): Path to the adapter model (optional).
 
     Returns:
     model: Configured LLaMA model.
@@ -80,58 +84,18 @@ def get_model(model_name='meta-llama/Llama-2-7b-chat-hf', use_bit_4=False, adapt
         """
         def __init__(self):
             self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-            ModelForCausalLM = AutoModelForCausalLM
+            self.model_file = model_name
 
-            if adapter:
-                if 'ppo' in adapter:
-                    load_model_name = adapter
-                    load_adapter = None
-                else:
-                    load_adapter = adapter
-                    load_model_name = model_name
-            else:
-                load_model_name = model_name
-                load_adapter = None
-            self.model_file = load_model_name
-
-            if use_bit_4:
-                self._load_large_model(load_model_name,ModelForCausalLM)
-            else:
-                self._load_standard_model(load_model_name, load_adapter,ModelForCausalLM)
+            num_gpus = torch.cuda.device_count()
+            dmap = "auto" if num_gpus > 1 else "cuda"
+            self.model = AutoModelForCausalLM.from_pretrained(
+                model_name, torch_dtype="auto", device_map=dmap, low_cpu_mem_usage=True)
+            self.model.eval()
+            self.device = self.model.device
 
             self.bias_cache = []
             for i, layer in enumerate(self.model.model.layers):
                 self.bias_cache.append(deepcopy(self.model.model.layers[i].self_attn.o_proj.bias))
-
-        def _load_large_model(self, model_name,ModelForCausalLM):
-            """
-            Loads the large variant of the Meta-LLaMA model (70B).
-            """
-            model = ModelForCausalLM.from_pretrained(model_name, low_cpu_mem_usage=True, torch_dtype=torch.bfloat16)
-            self.weight_cache = [deepcopy(layer.self_attn.o_proj.weight).cuda() for layer in model.model.layers]
-            model = None
-            torch.cuda.empty_cache()
-            from transformers import BitsAndBytesConfig
-            quantization_config = BitsAndBytesConfig(
-                load_in_4bit=True,
-                bnb_4bit_compute_dtype=torch.bfloat16,
-                bnb_4bit_use_double_quant=True,
-                bnb_4bit_quant_type='nf4'
-            )
-            self.model = ModelForCausalLM.from_pretrained(model_name, low_cpu_mem_usage=True, quantization_config=quantization_config, torch_dtype=torch.bfloat16)
-
-        def _load_standard_model(self, model_name, adapter,ModelForCausalLM):
-            """
-            Loads the standard variant of the Meta-LLaMA model.
-            """
-            num_gpus = torch.cuda.device_count()
-            dmap = "auto" if num_gpus > 1 else "cuda"
-            self.model = ModelForCausalLM.from_pretrained(
-                model_name, dtype="auto", device_map=dmap, low_cpu_mem_usage=True)
-            if adapter:
-                self.model.load_adapter(adapter)
-            self.model.eval()
-            self.device = self.model.device
 
         def generate(model, text, max_length=512, max_new_tokens=None):
             """
@@ -373,13 +337,13 @@ def get_model(model_name='meta-llama/Llama-2-7b-chat-hf', use_bit_4=False, adapt
                             {"role": "user", "content": instruction},
                             {"role": "assistant", "content": model_output}
                         ]
-                        return torch.tensor(tokenizer.apply_chat_template(con)[:-1]).unsqueeze(0)
+                        return torch.tensor(_chat_ids(tokenizer, con)[:-1]).unsqueeze(0)
                     else:
                         con = [
                             {"role": "system", "content": system_prompt},
                             {"role": "user", "content": instruction},
                         ]
-                        return torch.tensor(tokenizer.apply_chat_template(con)).unsqueeze(0)
+                        return torch.tensor(_chat_ids(tokenizer, con)).unsqueeze(0)
                 else:
                     B_INST, E_INST = "[INST]", "[/INST]"
                     B_SYS, E_SYS = "<<SYS>>\n", "\n<</SYS>>\n\n"
@@ -446,8 +410,7 @@ def get_model(model_name='meta-llama/Llama-2-7b-chat-hf', use_bit_4=False, adapt
                 displacement = np.zeros((num_heads, head_dim))
                 for head_no, head_vec, std in list_int_vec:
                     displacement[head_no] = alpha * std * head_vec
-                weight = (self.weight_cache[layer_no] if hasattr(self, 'weight_cache')
-                          else self.model.model.layers[layer_no].self_attn.o_proj.weight)
+                weight = self.model.model.layers[layer_no].self_attn.o_proj.weight
                 device = weight.device
                 displacement = torch.tensor(rearrange(displacement, 'h d -> (h d)'), device=device)
                 bias_tobe = F.linear(displacement.to(weight.dtype), weight)
