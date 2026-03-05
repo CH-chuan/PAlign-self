@@ -43,8 +43,8 @@ From the repository root:
 pip install .
 ```
 
-This single command installs all required dependencies (including `baukit`,
-`einops`, `transformers>=4.50`, `accelerate`, `scikit-learn`, etc.).
+This single command installs all required dependencies (`einops`,
+`transformers>=4.50`, `accelerate`, `scikit-learn`, etc.).
 
 ## Step 4: Verify data files
 
@@ -160,7 +160,7 @@ print(f\"A={s['mean_A_abs']:.2f}  C={s['mean_C_abs']:.2f}  E={s['mean_E_abs']:.2
 For each of the 300 test subjects:
 
 1. **Activation extraction** — The 120 IPIP-NEO training questions are passed
-   through the model. `baukit.TraceDict` captures the output of every
+   through the model. Native PyTorch forward pre-hooks capture the output of every
    `self_attn.o_proj` layer, yielding per-head activation vectors.
 
 2. **Probe training** — A logistic regression classifier is trained on each
@@ -186,9 +186,6 @@ For each of the 300 test subjects:
 **CUDA out of memory** — The batch size is hardcoded to 3 in
 `main.py:generateAnswer()`. If you still OOM, reduce it to 1. This will
 roughly triple runtime.
-
-**`baukit` import error** — Re-run `pip install .` from the repository root.
-`baukit` is installed automatically from its GitHub source.
 
 **HuggingFace gated model error** — Run `huggingface-cli login` and ensure you
 have accepted the Llama 3 license at

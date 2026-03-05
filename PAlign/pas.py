@@ -386,6 +386,36 @@ def get_model(model_name='meta-llama/Llama-2-7b-chat-hf'):
 
             return all_head_wise_activations
 
+        def export_biases(self, path):
+            """
+            Export modified o_proj biases to a compact file.
+
+            Must be called after set_activate(). Compares current o_proj.bias
+            against bias_cache and saves only the modified layers.
+
+            Args:
+            path (str): Output file path for torch.save().
+            """
+            bias_deltas = {}
+            for i, layer in enumerate(self.model.model.layers):
+                current_bias = layer.self_attn.o_proj.bias
+                original_bias = self.bias_cache[i]
+
+                if original_bias is None and current_bias is not None:
+                    bias_deltas[i] = current_bias.detach().cpu()
+                elif original_bias is not None and current_bias is not None:
+                    delta = current_bias.detach().cpu() - original_bias.detach().cpu()
+                    if delta.abs().max().item() > 1e-8:
+                        bias_deltas[i] = current_bias.detach().cpu()
+
+            if not bias_deltas:
+                print("Warning: no modified biases found. Was set_activate() called?")
+
+            os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+            torch.save(bias_deltas, path)
+            print(f"Exported {len(bias_deltas)} modified layer biases to {path}")
+            return bias_deltas
+
         def set_activate(self, interventions, alpha):
             """
             Sets the activations for the model based on interventions.

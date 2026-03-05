@@ -172,12 +172,35 @@ python -m benchmarks.run_all --methods dpo prompt_morl --num_subjects 5
 
 All training-based benchmarks use 4-bit QLoRA (~5-6 GB VRAM) and support resume via pickle checkpoints. Interrupted runs automatically skip completed subjects on restart.
 
+### Serving with vLLM
+
+Export a PAS-steered model as a standard HuggingFace checkpoint, then serve it with vLLM (or any HF-compatible runtime). Two-step process:
+
+```bash
+# Step 1: Run PAS for one subject and export compact bias deltas (~500KB)
+python export_for_serving.py export-biases \
+  --model_file meta-llama/Meta-Llama-3-8B-Instruct \
+  --subject_index 42 --alpha 4 \
+  --output persona_biases.pt
+
+# Step 2: Bake bias deltas into a full model checkpoint
+python export_for_serving.py bake \
+  --model_file meta-llama/Meta-Llama-3-8B-Instruct \
+  --biases persona_biases.pt \
+  --output_dir ./baked_model
+
+# Step 3: Serve with vLLM (no special config needed)
+vllm serve ./baked_model --dtype float16
+```
+
+The bias file is portable — you can store many persona files (~500KB each) and bake on demand. The `PASLM.export_biases()` method can also be called programmatically after `set_activate()`.
+
 ## Architecture
 
 ### Core Pipeline (`main.py`)
 
 1. **Load data**: `getItems()` reads PAPI questionnaires from `PAPI/` (IPIP-NEO-120 train set + 180-item test set)
-2. **Preprocess activations**: For each Big Five trait, extract head-wise activations from `o_proj` layers using baukit's `TraceDict`
+2. **Preprocess activations**: For each Big Five trait, extract head-wise activations from `o_proj` layers using native PyTorch forward pre-hooks
 3. **Per-subject loop** (`process_pas`): For each of 300 subjects:
    - Train logistic regression probes on (layer, head) activations → select top 24 heads
    - Compute intervention vectors (direction + std) per selected head
@@ -189,7 +212,6 @@ All training-based benchmarks use 4-bit QLoRA (~5-6 GB VRAM) and support resume 
 
 - **`PAlign/pas.py`** — `PASLM` class: model loading, activation extraction (`preprocess_activate_dataset`), probe training (`get_activations`), intervention application (`set_activate`). Uses native PyTorch forward pre-hooks on `o_proj` layers.
 - **`baseline_utils.py`** — Answer parsing (A-E → 1-5 scores), MAE calculation, few-shot and personality-prompt baselines.
-- **`PAlign/modeling_llama.py`, `modeling_mistral.py`** — Custom model implementations with activation hook support (legacy; new code uses standard HuggingFace models with hooks).
 
 ### Intervention Mechanism
 
@@ -209,7 +231,7 @@ This steers model behavior toward the target personality profile without fine-tu
 
 ## Key Dependencies
 
-Core: `torch`, `transformers` (>=4.50), `baukit`, `einops`, `scikit-learn`, `numpy`, `pandas`
+Core: `torch`, `transformers` (>=4.50), `einops`, `scikit-learn`, `numpy`, `pandas`
 Benchmarks: `peft` (>=0.7), `trl` (>=0.11, <0.12), `bitsandbytes` (>=0.43), `accelerate` (>=0.27), `datasets`
 
 ## Data
