@@ -25,6 +25,9 @@ synthetic_HL/
 build/
 dist/
 
+# Claude Code worktrees (contain nested git repos)
+.claude/worktrees/
+
 # Test/validation runs
 test-remove-baukit/
 
