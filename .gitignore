@@ -21,6 +21,19 @@ reproduction/benchmarks/soups/adapters/
 # Synthetic experiment outputs
 synthetic_HL/
 
+# Build artifacts
+build/
+dist/
+
+# Claude Code
+.claude/
+
+# Test/validation runs
+test-remove-baukit/
+
+# Old logs
+qa_log-old/
+
 # General
 *.log
 .env
