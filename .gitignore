@@ -25,9 +25,6 @@ synthetic_HL/
 build/
 dist/
 
-# Claude Code
-.claude/
-
 # Test/validation runs
 test-remove-baukit/
 
