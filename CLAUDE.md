@@ -9,8 +9,17 @@ Reproduction of "Personality Alignment of Large Language Models" (ICLR 2025). Im
 ## Commands
 
 ```bash
-# Install
+# Core (PAS pipeline only)
 pip install .
+
+# With benchmark dependencies (DPO, PPO, Prompt-MORL, Soups)
+pip install .[benchmarks]
+
+# With serving dependencies (vLLM, eval_served.py)
+pip install .[serving]
+
+# Everything
+pip install .[benchmarks,serving]
 ```
 
 ### PAS (Persona Activation Steering)
@@ -217,6 +226,43 @@ When `--alpha` is omitted, the export runs the full 6-alpha sweep `[0, 1, 2, 4, 
 
 The bias file is portable — you can store many persona files (~500KB each) and bake on demand. The `PASLM.export_biases()` method can also be called programmatically after `set_activate()`.
 
+#### Evaluating a Served Model
+
+Once a baked model is served via vLLM, evaluate it against ground-truth personality scores using the OpenAI-compatible API:
+
+```bash
+python eval_served.py \
+  --model_dir ./baked_model \
+  --api_base http://localhost:8000/v1 \
+  --output eval_result.json \
+  --raw_log raw_gen.log
+```
+
+`--model_dir` reads `persona_meta.json` for the subject index (or use `--subject_index` directly). Model name is auto-detected from the vLLM server.
+
+#### Automated Serving Pipeline
+
+`run_serving_pipeline.sh` automates the full loop (export → bake → serve → eval → cleanup) for multiple subjects:
+
+```bash
+# All 300 subjects
+bash run_serving_pipeline.sh --num_subjects 0
+
+# 5 subjects starting from index 10
+bash run_serving_pipeline.sh --num_subjects 5 --start_index 10
+
+# Custom model / port / output
+bash run_serving_pipeline.sh --model_file meta-llama/Meta-Llama-3-8B-Instruct \
+  --port 8001 --output_dir ./served_eval
+```
+
+Output structure under `--output_dir` (default `./served_eval`):
+- `biases/s{i}.pt` — per-subject bias files
+- `results/eval_s{i}.json` — per-subject evaluation results
+- `raw_logs/s{i}.log` — raw generation logs
+
+Supports resume: skips subjects whose `eval_s{i}.json` already exists. Handles vLLM lifecycle (start/stop/GPU cleanup) automatically.
+
 ## Architecture
 
 ### Core Pipeline (`main.py`)
@@ -254,7 +300,8 @@ This steers model behavior toward the target personality profile without fine-tu
 ## Key Dependencies
 
 Core: `torch`, `transformers` (>=4.50), `einops`, `scikit-learn`, `numpy`, `pandas`
-Benchmarks: `peft` (>=0.7), `trl` (>=0.11, <0.12), `bitsandbytes` (>=0.43), `accelerate` (>=0.27), `datasets`
+Benchmarks (`.[benchmarks]`): `peft` (>=0.7), `trl` (>=0.11, <0.12), `bitsandbytes` (>=0.43), `accelerate` (>=0.27), `datasets`
+Serving (`.[serving]`): `vllm`, `openai`
 
 ## Data
 

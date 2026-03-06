@@ -9,8 +9,6 @@ setup(
     url='xxx',
     packages=find_packages(),
     install_requires=[
-        'accelerate>=0.27.0',
-        'datasets',
         'einops>=0.8.2',
         'huggingface_hub>=0.36.2',
         'jinja2>=3.1.0',
@@ -18,16 +16,27 @@ setup(
         'numpy',
         'openpyxl',
         'pandas',
-        'peft>=0.7.0',
         'safetensors>=0.7.0',
         'scikit-learn>=0.23.2',
         'rich>=13.0',
         'torch>=2.5.1',
         'tqdm>=4.67.3',
         'transformers>=4.50',
-        'trl>=0.11.0,<0.12.0',
         'xlrd>=2.0.2',
     ],
+    extras_require={
+        'benchmarks': [
+            'accelerate>=0.27.0',
+            'bitsandbytes>=0.43.0',
+            'datasets',
+            'peft>=0.7.0',
+            'trl>=0.11.0,<0.12.0',
+        ],
+        'serving': [
+            'openai',
+            'vllm',
+        ],
+    },
     classifiers=[
         'Programming Language :: Python :: 3',
         'License :: OSI Approved :: MIT License',

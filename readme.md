@@ -24,7 +24,18 @@ project with all dependencies:
 conda create -n palign_repro python=3.11 -y
 conda activate palign_repro
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+
+# Core (PAS pipeline only)
 pip install .
+
+# With benchmark dependencies (DPO, PPO, Prompt-MORL, Soups)
+pip install .[benchmarks]
+
+# With serving dependencies (vLLM export/eval)
+pip install .[serving]
+
+# Everything
+pip install .[benchmarks,serving]
 ```
 
 See [REPRODUCTION_GUIDE.md](REPRODUCTION_GUIDE.md) for a full step-by-step walkthrough.
@@ -84,14 +95,58 @@ PAS is an innovative method designed to fine-tune LLMs to align with individual 
 
 ### Training and Evaluation
 
-To train and evaluate the models using the PAS method, execute:
+To run PAS alignment and evaluation (default: few-shot-PAS on all 300 subjects):
 
 ```bash
-python main.py
+# Full run (~35 hours on RTX 4090)
+python main.py --model_file meta-llama/Meta-Llama-3-8B-Instruct --num_subjects 0
+
+# Quick test (5 subjects)
+python main.py --model_file meta-llama/Meta-Llama-3-8B-Instruct --num_subjects 5
 ```
 
-This script aligns the language model with the specified user profiles and evaluates its performance on multiple-choice tasks.
+Use `--batch_size 3` for 24GB GPUs (default 16 for A100-80GB). Interrupted runs resume automatically.
 
+### Benchmarks
+
+Six comparison methods from Table 1 are included. Two black-box baselines run via `main.py`:
+
+```bash
+python main.py --modes few-shot --model_file meta-llama/Meta-Llama-3-8B-Instruct --num_subjects 0
+python main.py --modes personality_prompt --model_file meta-llama/Meta-Llama-3-8B-Instruct --num_subjects 0
+```
+
+Four training-based methods (DPO, PPO, Prompt-MORL, Personalized-Soups) run via `benchmarks/`:
+
+```bash
+# Run all 4
+python -m benchmarks.run_all --methods all --model_name meta-llama/Meta-Llama-3-8B-Instruct --num_subjects 0
+
+# Run individually
+python -m benchmarks.dpo.run_dpo --model_name meta-llama/Meta-Llama-3-8B-Instruct --num_subjects 0
+```
+
+### Serving with vLLM
+
+Export a PAS-steered model and serve it with any HuggingFace-compatible runtime:
+
+```bash
+# Export bias deltas (runs alpha sweep)
+python export_for_serving.py export-biases \
+  --model_file meta-llama/Meta-Llama-3-8B-Instruct \
+  --subject_index 42 --output persona_biases.pt
+
+# Bake into a full checkpoint
+python export_for_serving.py bake \
+  --model_file meta-llama/Meta-Llama-3-8B-Instruct \
+  --biases persona_biases.pt --output_dir ./baked_model
+
+# Serve and evaluate
+vllm serve ./baked_model --dtype float16
+python eval_served.py --model_dir ./baked_model --output eval_result.json
+```
+
+See [CLAUDE.md](CLAUDE.md) for full CLI reference and architecture details.
 
 ## Contributions
 
