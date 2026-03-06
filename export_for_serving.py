@@ -91,7 +91,7 @@ def run_export_biases(args):
 
     # Train probes and get intervention vectors
     print("Training probes and computing interventions...")
-    interventions = model.get_activations(
+    interventions, top_heads, all_head_accs = model.get_activations(
         deepcopy(head_wise_activations), labels, num_to_intervene=24
     )
 
@@ -155,6 +155,8 @@ def run_export_biases(args):
         'case_id': sample['train'][0]['case'],
         'alpha': best_alpha,
         'alpha_mode': alpha_mode,
+        'num_to_intervene': 24,
+        'modified_heads': [[int(x) for x in h] for h in top_heads],
         'num_modified_layers': len(bias_deltas),
         'modified_layers': sorted(bias_deltas.keys()),
     }
