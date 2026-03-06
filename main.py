@@ -36,6 +36,12 @@ SCORES_BACK = {
 SYSTEM_PROMPT = "You are a helpful, honest and concise assistant."
 NEUTRAL_SYSTEM_PROMPT = "You are an AI assistant."
 
+
+def build_few_shot_prompt(train_items):
+    """Build the few-shot system prompt from training items."""
+    return 'Here are some of your behaviors and your level of recognition towards them;' + \
+           ';'.join([f"{it['text']}:{SCORES_BACK[it['value']]}" for it in train_items])
+
 # Templates for personality assessment
 TEMPLATE = """Given a statement of you: "You {}."
 Please choose from the following options to identify how accurately this statement describes you.
@@ -254,8 +260,7 @@ def process_pas(data, model, tokenizer, model_file, output_dir='./reproduction',
 
         # Generate system prompt
         if use_few_shot:
-            system_prompt_text = 'Here are some of your behaviors and your level of recognition towards them;' + \
-                                 ';'.join([f"{it['text']}:{SCORES_BACK[it['value']]}" for it in sample['train']])
+            system_prompt_text = build_few_shot_prompt(sample['train'])
         else:
             system_prompt_text = NEUTRAL_SYSTEM_PROMPT
 
@@ -444,7 +449,7 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="Personality Alignment of LLMs")
-    parser.add_argument("--modes", default='PAS', help="Assessment mode (PAS, few-shot-PAS, NO_CHANGE, few-shot, personality_prompt)")
+    parser.add_argument("--modes", default='few-shot-PAS', help="Assessment mode (few-shot-PAS, PAS, NO_CHANGE, few-shot, personality_prompt)")
     parser.add_argument("--model_file", default='meta-llama/Meta-Llama-3-8B-Instruct', help="HuggingFace model name")
     parser.add_argument("--num_subjects", type=int, default=0, help="Number of subjects to process (0=all)")
     parser.add_argument("--output_dir", default='./reproduction', help="Output directory for results")

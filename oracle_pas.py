@@ -24,7 +24,7 @@ from tqdm import tqdm
 from main import (
     SCORES, SCORES_BACK, TEMPLATE, NEUTRAL_SYSTEM_PROMPT,
     prompt_to_tokens, getItems, generateAnswer, from_index_to_data,
-    print_and_save_results, setup_raw_logger, lmean,
+    print_and_save_results, setup_raw_logger, lmean, build_few_shot_prompt,
 )
 from baseline_utils import process_answers, calc_mean_and_var
 from PAlign.pas import get_model
@@ -219,7 +219,7 @@ def process_oracle_pas(data, model, tokenizer, model_file, oracle_alphas,
             print(f"Warning: no oracle alpha for subject {index}, skipping")
             continue
 
-        system_prompt_text = NEUTRAL_SYSTEM_PROMPT
+        system_prompt_text = build_few_shot_prompt(sample['train'])
 
         # Build labels from ALL 300 items — same trait × item order as personal_data
         labels = []
