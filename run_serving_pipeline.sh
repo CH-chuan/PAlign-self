@@ -7,9 +7,8 @@ START_INDEX=0
 MODEL_FILE="meta-llama/Meta-Llama-3-8B-Instruct"
 PORT=8000
 CONDA_ENV="palign_repro"
+OUTPUT_DIR="./served_eval"
 BAKED_DIR="./baked_model_tmp"
-BIAS_DIR="./persona_biases"
-EVAL_DIR="./test_served_model"
 VLLM_PID=""
 
 # === Parse CLI args ===
@@ -19,6 +18,7 @@ while [[ $# -gt 0 ]]; do
         --start_index)  START_INDEX="$2"; shift 2 ;;
         --model_file)   MODEL_FILE="$2"; shift 2 ;;
         --port)         PORT="$2"; shift 2 ;;
+        --output_dir)   OUTPUT_DIR="$2"; shift 2 ;;
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done
@@ -33,13 +33,19 @@ else
     fi
 fi
 
+# Derive subdirectories from OUTPUT_DIR
+BIAS_DIR="${OUTPUT_DIR}/biases"
+EVAL_DIR="${OUTPUT_DIR}/results"
+RAW_LOG_DIR="${OUTPUT_DIR}/raw_logs"
+
 echo "=== Serving Pipeline ==="
 echo "Subjects: ${START_INDEX} to $((END_INDEX - 1))"
 echo "Model: ${MODEL_FILE}"
 echo "Port: ${PORT}"
+echo "Output: ${OUTPUT_DIR}"
 echo "========================"
 
-mkdir -p "$BIAS_DIR" "$EVAL_DIR"
+mkdir -p "$BIAS_DIR" "$EVAL_DIR" "$RAW_LOG_DIR"
 
 # === Kill any existing process on the target port ===
 existing_pid=$(lsof -ti tcp:"$PORT" 2>/dev/null || true)
@@ -158,7 +164,8 @@ for (( i=START_INDEX; i<END_INDEX; i++ )); do
     if ! conda run -n "$CONDA_ENV" python eval_served.py \
         --model_dir "$BAKED_DIR" \
         --api_base "http://localhost:${PORT}/v1" \
-        --output "${EVAL_DIR}/eval_s${i}.json"; then
+        --output "${EVAL_DIR}/eval_s${i}.json" \
+        --raw_log "${RAW_LOG_DIR}/s${i}.log"; then
         echo "[ERROR] eval failed for subject $i"
         eval_ok=false
     fi
@@ -178,5 +185,7 @@ done
 
 echo ""
 echo "=== Pipeline complete ==="
-echo "Bias files: ${BIAS_DIR}/"
-echo "Eval results: ${EVAL_DIR}/"
+echo "Output directory: ${OUTPUT_DIR}/"
+echo "  Bias files:   ${BIAS_DIR}/"
+echo "  Eval results: ${EVAL_DIR}/"
+echo "  Raw logs:     ${RAW_LOG_DIR}/"

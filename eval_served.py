@@ -11,8 +11,10 @@ Usage:
 
 import argparse
 import json
+import logging
 import os
 import sys
+from datetime import datetime, timezone
 
 from openai import OpenAI
 from tqdm import tqdm
@@ -60,6 +62,7 @@ def main():
     parser.add_argument("--subject_index", type=int, default=None,
                         help="Subject index (0-299). Overrides persona_meta.json.")
     parser.add_argument("--output", default=None, help="Output JSON path")
+    parser.add_argument("--raw_log", default=None, help="Path to raw generation log file")
     args = parser.parse_args()
 
     # Resolve subject_index
@@ -104,14 +107,28 @@ def main():
     sample = data[subject_index]
     system_prompt = build_few_shot_prompt(sample["train"])
 
+    # Set up raw generation logger
+    raw_logger = None
+    if args.raw_log:
+        os.makedirs(os.path.dirname(args.raw_log) or ".", exist_ok=True)
+        raw_logger = logging.getLogger("raw_gen")
+        raw_logger.setLevel(logging.INFO)
+        raw_logger.propagate = False
+        fh = logging.FileHandler(args.raw_log, mode="w")
+        fh.setFormatter(logging.Formatter("%(message)s"))
+        raw_logger.addHandler(fh)
+
     # Query the model for each test item
     test_items = sample["test"]
     answers = []
     print(f"Evaluating subject {subject_index} ({len(test_items)} test items)...")
-    for item in tqdm(test_items):
+    for qi, item in enumerate(tqdm(test_items)):
         question = TEMPLATE.format(item["text"].lower())
         ans = query_model(client, model_name, system_prompt, question)
         answers.append(ans)
+        if raw_logger:
+            ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+            raw_logger.info("[%s] q=%d | %s", ts, qi, ans.replace("\n", " "))
 
     # Score
     result = process_answers(answers, sample)
