@@ -17,20 +17,27 @@ pip install .
 
 Activation-steering method — the main contribution of the paper. Trains logistic regression probes to identify personality-relevant attention heads, then steers them at inference via `o_proj.bias` modification. Runs at fp16, ~20.5 GB VRAM.
 
+Two variants:
+- **few-shot-PAS** (`--modes few-shot-PAS`, **default**): Activation steering + few-shot prompt containing all 120 training items (the paper's original method)
+- **PAS** (`--modes PAS`): Pure activation steering with a neutral system prompt
+
 ```bash
-# Full run (all 300 subjects, ~35 hours)
+# Full run — default mode (few-shot-PAS, all 300 subjects, ~35 hours on RTX 4090)
+python main.py --model_file meta-llama/Meta-Llama-3-8B-Instruct --num_subjects 0
+
+# Full run — pure PAS (no few-shot prompt)
 python main.py --modes PAS --model_file meta-llama/Meta-Llama-3-8B-Instruct --num_subjects 0
 
 # Quick test (5 subjects)
-python main.py --modes PAS --model_file meta-llama/Meta-Llama-3-8B-Instruct --num_subjects 5
+python main.py --model_file meta-llama/Meta-Llama-3-8B-Instruct --num_subjects 5
 ```
 
 Interrupted runs resume automatically from pickle files in `reproduction/subject_results/`.
-Output: `reproduction/PAS_Meta-Llama-3-8B-Instruct_OOD.json`
+Output: `reproduction/{PAS,few-shot-PAS}_Meta-Llama-3-8B-Instruct_OOD.json`
 
 ### Oracle PAS (Pre-determined Alpha + Full-Data Probes)
 
-Variant of PAS that leverages prior runs to skip the 6-alpha sweep and improve probe quality. Uses a pre-determined alpha from prior runs and trains probes on all 300 items (train + test) instead of just 120 train items. Reduces runtime from ~35 hours to ~8 hours for 300 subjects.
+Variant of PAS that leverages prior runs to skip the 6-alpha sweep and improve probe quality. Uses a pre-determined alpha from prior runs and trains probes on all 300 items (train + test) instead of just 120 train items. Uses few-shot prompts during evaluation (same as default few-shot-PAS). Reduces runtime from ~35 hours to ~8 hours for 300 subjects.
 
 ```bash
 # Analysis only (no GPU) — print alpha consistency report
@@ -161,12 +168,21 @@ python -m benchmarks.run_all --methods all --model_name meta-llama/Meta-Llama-3-
 python -m benchmarks.run_all --methods dpo prompt_morl --num_subjects 5
 ```
 
+### NO_CHANGE Baseline
+
+Runs inference on a single subject without any steering or prompting — measures unmodified model behavior.
+
+```bash
+python main.py --modes NO_CHANGE --model_file meta-llama/Meta-Llama-3-8B-Instruct
+```
+
 ### Common Options
 
 | Flag | `main.py` | `benchmarks` | Description |
 |------|-----------|-------------|-------------|
 | Model | `--model_file` | `--model_name` | HuggingFace model name or path |
 | Subjects | `--num_subjects` | `--num_subjects` | Number of subjects (0 = all 300) |
+| Batch size | `--batch_size` | — | Inference batch size (default 16 for A100-80GB, use 3 for RTX 4090 24GB) |
 | Output | `--output_dir` | `--output_dir` | Output directory |
 | Data | — | `--data_dir` | PAPI data directory (default: `PAPI`) |
 
@@ -174,14 +190,18 @@ All training-based benchmarks use 4-bit QLoRA (~5-6 GB VRAM) and support resume 
 
 ### Serving with vLLM
 
-Export a PAS-steered model as a standard HuggingFace checkpoint, then serve it with vLLM (or any HF-compatible runtime). Two-step process:
+Export a PAS-steered model as a standard HuggingFace checkpoint, then serve it with vLLM (or any HF-compatible runtime). The alpha sweep uses the few-shot prompt during evaluation (same as default few-shot-PAS).
 
 ```bash
-# Step 1: Run PAS for one subject and export compact bias deltas (~500KB)
+# Step 1: Export bias deltas with full PAS alpha sweep (default, ~7 min on RTX 4090)
 python export_for_serving.py export-biases \
   --model_file meta-llama/Meta-Llama-3-8B-Instruct \
-  --subject_index 42 --alpha 4 \
-  --output persona_biases.pt
+  --subject_index 42 --output persona_biases.pt
+
+# Or with a fixed alpha (skip sweep)
+python export_for_serving.py export-biases \
+  --model_file meta-llama/Meta-Llama-3-8B-Instruct \
+  --subject_index 42 --alpha 4 --output persona_biases.pt
 
 # Step 2: Bake bias deltas into a full model checkpoint
 python export_for_serving.py bake \
@@ -192,6 +212,8 @@ python export_for_serving.py bake \
 # Step 3: Serve with vLLM (no special config needed)
 vllm serve ./baked_model --dtype float16
 ```
+
+When `--alpha` is omitted, the export runs the full 6-alpha sweep `[0, 1, 2, 4, 6, 8]` on the subject's test set and picks the alpha with lowest MAE — matching the paper's method. Use `--batch_size 3` for RTX 4090 24GB.
 
 The bias file is portable — you can store many persona files (~500KB each) and bake on demand. The `PASLM.export_biases()` method can also be called programmatically after `set_activate()`.
 
@@ -240,8 +262,31 @@ Benchmarks: `peft` (>=0.7), `trl` (>=0.11, <0.12), `bitsandbytes` (>=0.43), `acc
 - `PAPI/mpi_300_split.json` — Train/test question indices (120/180 split)
 - `PAPI/IPIP-NEO-ItemKey.xls` — Question text lookup
 
+### HPC Reproduction Pipeline
+
+Full Table 1 reproduction on SLURM (A100-80GB). Submits all 8 methods (PAS, few-shot-PAS, few-shot, personality_prompt, DPO, PPO, Prompt-MORL, Soups) as separate jobs.
+
+```bash
+# One-time setup
+bash hpc/setup_env.sh && chmod +x hpc/submit_reproduction.sh
+
+# Submit all methods
+./hpc/submit_reproduction.sh --all
+
+# Submit specific methods
+./hpc/submit_reproduction.sh --method pas few_shot_pas dpo
+
+# Preview without submitting
+./hpc/submit_reproduction.sh --all --dry-run
+
+# Aggregate results after completion
+python hpc/aggregate_reproduction.py
+```
+
+See `hpc/README.md` for batch size tuning, method list, and file structure.
+
 ## Known Constraints
 
-- Batch size hardcoded to 3 (fits 24GB VRAM on RTX 4090, model uses ~20.5GB)
-- Each subject takes ~6-7 minutes (6 alphas × 180 questions in batches of 3)
+- Default batch size: 16 (A100-80GB); use `--batch_size 3` for RTX 4090 24GB (~20.5GB VRAM)
+- Each subject takes ~6-7 minutes on RTX 4090 (6 alphas × 180 questions in batches of 3)
 - Paper Table 1 targets: A=0.94, C=0.91, E=0.86, N=0.98, O=0.72 (MAE, lower=better)
