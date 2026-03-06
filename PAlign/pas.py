@@ -89,7 +89,7 @@ def get_model(model_name='meta-llama/Llama-2-7b-chat-hf'):
             num_gpus = torch.cuda.device_count()
             dmap = "auto" if num_gpus > 1 else "cuda"
             self.model = AutoModelForCausalLM.from_pretrained(
-                model_name, torch_dtype="auto", device_map=dmap, low_cpu_mem_usage=True)
+                model_name, dtype="auto", device_map=dmap, low_cpu_mem_usage=True)
             self.model.eval()
             self.device = self.model.device
 

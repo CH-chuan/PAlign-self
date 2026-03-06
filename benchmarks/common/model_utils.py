@@ -38,7 +38,7 @@ def load_base_model_and_tokenizer(model_name, qlora_cfg=None):
         model_name,
         quantization_config=bnb_config,
         device_map="auto",
-        torch_dtype=compute_dtype,
+        dtype=compute_dtype,
     )
     model = prepare_model_for_kbit_training(model)
 

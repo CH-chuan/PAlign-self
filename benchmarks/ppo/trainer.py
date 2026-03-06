@@ -59,7 +59,7 @@ def train_ppo_for_subject(model_name, tokenizer, subject_data, output_dir,
         model_name,
         peft_config=lora_config,
         device_map="auto",
-        torch_dtype=torch.bfloat16,
+        dtype=torch.bfloat16,
         load_in_4bit=True,
     )
 
@@ -140,7 +140,7 @@ def load_ppo_model_for_eval(model_name, adapter_path, tokenizer):
         model_name,
         quantization_config=bnb_config,
         device_map="auto",
-        torch_dtype=torch.bfloat16,
+        dtype=torch.bfloat16,
     )
     peft_model = load_adapter(base_model, adapter_path)
     return peft_model

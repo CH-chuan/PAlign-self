@@ -61,7 +61,7 @@ def train_one_extreme_model(model_name, tokenizer, all_data, trait, direction,
         model_name,
         peft_config=lora_config,
         device_map="auto",
-        torch_dtype=torch.bfloat16,
+        dtype=torch.bfloat16,
         load_in_4bit=True,
     )
 

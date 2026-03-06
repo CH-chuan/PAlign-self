@@ -223,7 +223,7 @@ if __name__ == "__main__":
         '/zhuminjun/model/Meta-Llama-3-70B-Instruct-hf',
         low_cpu_mem_usage=True,
         quantization_config=quantization_config,
-        torch_dtype=torch.bfloat16,
+        dtype=torch.bfloat16,
 
     )
     tokenizer = AutoTokenizer.from_pretrained('Meta-Llama-3-70B-Instruct-hf')
