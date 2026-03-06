@@ -64,13 +64,13 @@ def prompt_to_tokens(tokenizer, system_prompt, instruction, model_output, model_
             {"role": "user", "content": instruction},
             {"role": "assistant", "content": model_output}
         ]
-        return _chat_ids(tokenizer, con)[:-1]
+        return _chat_ids(tokenizer, con, continue_final_message=True)
     else:
         con = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": instruction},
         ]
-        return _chat_ids(tokenizer, con)
+        return _chat_ids(tokenizer, con, add_generation_prompt=True)
 
 
 def getItems(filename):

@@ -35,11 +35,10 @@ def prompt_to_tokens_hf(tokenizer, system_prompt, instruction, model_output, mod
     if model_output:
         messages.append({"role": "assistant", "content": model_output})
 
-    token_ids = _chat_ids(tokenizer, messages, add_generation_prompt=not model_output)
-
-    # Trim the trailing EOS if model_output is provided (for forced prefix)
     if model_output:
-        token_ids = token_ids[:-1]
+        token_ids = _chat_ids(tokenizer, messages, continue_final_message=True)
+    else:
+        token_ids = _chat_ids(tokenizer, messages, add_generation_prompt=True)
 
     return token_ids
 

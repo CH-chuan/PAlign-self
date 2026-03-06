@@ -337,13 +337,13 @@ def get_model(model_name='meta-llama/Llama-2-7b-chat-hf'):
                         {"role": "user", "content": instruction},
                         {"role": "assistant", "content": model_output}
                     ]
-                    return torch.tensor(_chat_ids(tokenizer, con)[:-1]).unsqueeze(0)
+                    return torch.tensor(_chat_ids(tokenizer, con, continue_final_message=True)).unsqueeze(0)
                 else:
                     con = [
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": instruction},
                     ]
-                    return torch.tensor(_chat_ids(tokenizer, con)).unsqueeze(0)
+                    return torch.tensor(_chat_ids(tokenizer, con, add_generation_prompt=True)).unsqueeze(0)
 
             def data_preprocess(dataset):
                 all_prompts = []
