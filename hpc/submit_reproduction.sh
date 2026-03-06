@@ -18,6 +18,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 CONFIGS_DIR="${PROJECT_DIR}/exp_configs/methods"
+GPU_MAP="${PROJECT_DIR}/exp_configs/models/gpu_map.conf"
 SLURM_TEMPLATE="${SCRIPT_DIR}/reproduction.slurm"
 
 ALL_METHODS=(pas few_shot_pas dpo ppo prompt_morl soups few_shot personality_prompt)
@@ -113,6 +114,32 @@ if [[ ${#METHODS[@]} -eq 0 ]]; then
     exit 1
 fi
 
+# Resolve GPU count from model name using gpu_map.conf
+resolve_gpu_count() {
+    local model_path="$1"
+    # Strip trailing slash
+    model_path="${model_path%/}"
+    # Normalize HuggingFace snapshot paths: .../models--X--Y/snapshots/... → X/Y
+    if [[ "${model_path}" =~ models--([^/]+)--([^/]+) ]]; then
+        model_path="${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
+    fi
+    # Strip /snapshots/... suffix
+    model_path="${model_path%%/snapshots/*}"
+
+    if [[ -f "${GPU_MAP}" ]]; then
+        while IFS=: read -r pattern count; do
+            # Skip comments and blank lines
+            [[ -z "${pattern}" || "${pattern}" =~ ^# ]] && continue
+            # Case-insensitive match
+            if echo "${model_path}" | grep -qi "${pattern}"; then
+                echo "${count}"
+                return
+            fi
+        done < "${GPU_MAP}"
+    fi
+    echo "1"
+}
+
 # Ensure log directory exists
 mkdir -p "${PROJECT_DIR}/logs/reproduction"
 
@@ -126,6 +153,9 @@ for method in "${METHODS[@]}"; do
 
     # Source the config
     source "${conf}"
+
+    # Resolve GPU count from model
+    GPU_COUNT=$(resolve_gpu_count "${MODEL_NAME}")
 
     # Build the sbatch command
     cmd=(
