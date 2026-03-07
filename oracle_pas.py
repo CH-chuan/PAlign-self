@@ -26,7 +26,8 @@ from main import (
     prompt_to_tokens, getItems, generateAnswer, from_index_to_data,
     print_and_save_results, setup_raw_logger, lmean, build_few_shot_prompt,
 )
-from baseline_utils import process_answers, calc_mean_and_var
+from baseline_utils import (process_answers, calc_mean_and_var, save_subject_meta,
+                            save_subject_answers, save_subject_probes, load_completed_indices)
 from PAlign.pas import get_model
 
 
@@ -47,20 +48,33 @@ def load_alphas(result_dirs, num_subjects=300):
             print(f"Warning: {subj_dir} not found, skipping")
             continue
         for idx in range(num_subjects):
+            # Try meta JSON first, fall back to pickle
+            meta_path = os.path.join(subj_dir, f'subject_{idx:04d}_meta.json')
             pkl_path = os.path.join(subj_dir, f'subject_{idx:04d}.pkl')
-            if not os.path.exists(pkl_path):
-                continue
-            with open(pkl_path, 'rb') as f:
-                rs = pickle.load(f)
-            alpha = rs.get('alpha', None)
-            if alpha is None:
-                continue
-            mae_sum = sum(v for _, v in rs['mean_ver_abs']['mean'])
-            alphas_data.setdefault(idx, []).append({
-                'alpha': alpha,
-                'mae_sum': mae_sum,
-                'run_dir': rd,
-            })
+            if os.path.exists(meta_path):
+                with open(meta_path, 'r') as f:
+                    meta = json.load(f)
+                alpha = meta.get('alpha')
+                if alpha is None:
+                    continue
+                mae_sum = sum(meta['per_trait_mae'].values())
+                alphas_data.setdefault(idx, []).append({
+                    'alpha': alpha,
+                    'mae_sum': mae_sum,
+                    'run_dir': rd,
+                })
+            elif os.path.exists(pkl_path):
+                with open(pkl_path, 'rb') as f:
+                    rs = pickle.load(f)
+                alpha = rs.get('alpha', None)
+                if alpha is None:
+                    continue
+                mae_sum = sum(v for _, v in rs['mean_ver_abs']['mean'])
+                alphas_data.setdefault(idx, []).append({
+                    'alpha': alpha,
+                    'mae_sum': mae_sum,
+                    'run_dir': rd,
+                })
     return alphas_data
 
 
@@ -177,14 +191,7 @@ def process_oracle_pas(data, model, tokenizer, model_file, oracle_alphas,
     progress_path = os.path.join(output_dir, 'oracle_pas_progress.jsonl')
 
     # Load existing results for resume
-    results = [None] * len(data)
-    done_indices = set()
-    for idx in range(len(data)):
-        pkl_path = os.path.join(output_dir, 'subject_results', f'subject_{idx:04d}.pkl')
-        if os.path.exists(pkl_path):
-            with open(pkl_path, 'rb') as f:
-                results[idx] = pickle.load(f)
-            done_indices.add(idx)
+    results, done_indices = load_completed_indices(len(data), output_dir)
     if done_indices:
         print(f"Resuming: {len(done_indices)} subjects already completed, skipping them.")
 
@@ -240,7 +247,7 @@ def process_oracle_pas(data, model, tokenizer, model_file, oracle_alphas,
                     personal_number += 2
 
         # Train probes and get intervention vectors
-        activate = model.get_activations(
+        activate, top_heads, all_head_accs = model.get_activations(
             deepcopy(head_wise_activations), labels, num_to_intervene=24
         )
 
@@ -249,7 +256,7 @@ def process_oracle_pas(data, model, tokenizer, model_file, oracle_alphas,
         model.set_activate(activate, alpha)
 
         case_id = sample['test'][0]['case']
-        raw_logger.info(f"=== subject={index} case={case_id} oracle_alpha={alpha} ===")
+        raw_logger.info(f"=== subject={index} case={case_id} alpha={alpha} ===")
 
         # Generate answers
         if eval_set == 'both':
@@ -280,7 +287,7 @@ def process_oracle_pas(data, model, tokenizer, model_file, oracle_alphas,
             rs = {
                 'ood': ood_result,
                 'all': all_result,
-                'oracle_alpha': alpha,
+                'alpha': alpha,
                 # Keep ood as the primary result for print_and_save_results
                 **ood_result,
             }
@@ -292,14 +299,21 @@ def process_oracle_pas(data, model, tokenizer, model_file, oracle_alphas,
                 raw_logger=raw_logger, batch_size=batch_size,
             )
             ood_result = process_answers(answers, sample)
-            rs = {**ood_result, 'oracle_alpha': alpha}
+            rs = {**ood_result, 'alpha': alpha}
 
         results[index] = rs
 
-        # Save per-subject pickle
-        pkl_path = os.path.join(output_dir, 'subject_results', f'subject_{index:04d}.pkl')
-        with open(pkl_path, 'wb') as f:
-            pickle.dump(rs, f)
+        # Save per-subject meta, answers, and probes
+        meta_path = os.path.join(output_dir, 'subject_results', f'subject_{index:04d}_meta.json')
+        save_subject_meta(meta_path, result=rs, subject_index=index,
+                          model_file=model_file,
+                          method='Oracle-PAS',
+                          alpha=alpha, alpha_mode='fixed',
+                          num_to_intervene=24,
+                          modified_heads=top_heads,
+                          modified_layers=sorted(set(l for l, h in top_heads)))
+        save_subject_answers(rs, index, output_dir)
+        save_subject_probes(all_head_accs, top_heads, index, output_dir)
 
         # Progress log
         ood_mae = {k: v for k, v in rs['mean_ver_abs']['mean']}
@@ -307,7 +321,7 @@ def process_oracle_pas(data, model, tokenizer, model_file, oracle_alphas,
         progress_entry = {
             'index': index,
             'case': case_id,
-            'oracle_alpha': alpha,
+            'alpha': alpha,
             'score_sum': score_sum,
             'mean_abs': ood_mae,
             'timestamp': datetime.now().isoformat(),
@@ -316,7 +330,7 @@ def process_oracle_pas(data, model, tokenizer, model_file, oracle_alphas,
             f.write(json.dumps(progress_entry) + '\n')
 
         print(f"[{datetime.now().strftime('%H:%M:%S')}] Subject {index}/{len(data)} done | "
-              f"case={case_id} | oracle_alpha={alpha} | "
+              f"case={case_id} | alpha={alpha} | "
               f"score_sum={score_sum:.3f}")
 
     results = [r for r in results if r is not None]

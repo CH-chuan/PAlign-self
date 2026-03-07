@@ -1,6 +1,5 @@
 import json
 import logging
-import pickle
 from huggingface_hub import login
 import os
 import pandas as pd
@@ -13,7 +12,9 @@ import re
 from pprint import pprint
 from PAlign.pas import get_model, _chat_ids
 from copy import deepcopy
-from baseline_utils import process_answers, process_few_shot, calc_mean_and_var, process_personality_prompt
+from baseline_utils import (process_answers, process_few_shot, calc_mean_and_var,
+                            process_personality_prompt, save_subject_meta, save_subject_answers,
+                            save_subject_probes, load_completed_indices)
 
 device = torch.device("cuda:0") if torch.cuda.is_available() else "cpu"
 global_result = {}
@@ -226,14 +227,7 @@ def process_pas(data, model, tokenizer, model_file, output_dir='./reproduction',
     progress_path = os.path.join(output_dir, 'pas_progress.jsonl')
 
     # Load existing results for resume
-    results = [None] * len(data)
-    done_indices = set()
-    for idx in range(len(data)):
-        pkl_path = os.path.join(output_dir, 'subject_results', f'subject_{idx:04d}.pkl')
-        if os.path.exists(pkl_path):
-            with open(pkl_path, 'rb') as f:
-                results[idx] = pickle.load(f)
-            done_indices.add(idx)
+    results, done_indices = load_completed_indices(len(data), output_dir)
     if done_indices:
         print(f"Resuming: {len(done_indices)} subjects already completed, skipping them.")
 
@@ -283,7 +277,7 @@ def process_pas(data, model, tokenizer, model_file, output_dir='./reproduction',
                     personal_number += 2 # this analogous to prior index on adding both pos and neg pairs for each item
 
         # Get activations for intervention
-        activate = model.get_activations(deepcopy(head_wise_activations), labels, num_to_intervene=24)
+        activate, top_heads, all_head_accs = model.get_activations(deepcopy(head_wise_activations), labels, num_to_intervene=24)
 
         # Test different activation levels
         alpha_values = [0, 1, 2, 4, 6, 8]
@@ -306,6 +300,7 @@ def process_pas(data, model, tokenizer, model_file, output_dir='./reproduction',
             # Process answers and calculate results
             result = process_answers(answers, sample)
             result_cache.append(result)
+            save_subject_answers(result, index, output_dir, alpha=num)
 
         # Select the best result based on mean absolute error
         scores = []
@@ -319,10 +314,17 @@ def process_pas(data, model, tokenizer, model_file, output_dir='./reproduction',
         rs['alpha'] = alpha_values[best_idx]
         results[index] = rs
 
-        # Save per-subject pickle for resume
-        pkl_path = os.path.join(output_dir, 'subject_results', f'subject_{index:04d}.pkl')
-        with open(pkl_path, 'wb') as f:
-            pickle.dump(rs, f)
+        # Save per-subject meta, answers, and probes
+        method_name = 'few-shot-PAS' if use_few_shot else 'PAS'
+        meta_path = os.path.join(output_dir, 'subject_results', f'subject_{index:04d}_meta.json')
+        save_subject_meta(meta_path, result=rs, subject_index=index,
+                          model_file=model_file,
+                          method=method_name,
+                          alpha=alpha_values[best_idx], alpha_mode='sweep',
+                          num_to_intervene=24,
+                          modified_heads=top_heads,
+                          modified_layers=sorted(set(l for l, h in top_heads)))
+        save_subject_probes(all_head_accs, top_heads, index, output_dir)
 
         # Append progress line
         progress_entry = {

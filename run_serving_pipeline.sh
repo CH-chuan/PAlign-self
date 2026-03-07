@@ -119,8 +119,9 @@ for (( i=START_INDEX; i<END_INDEX; i++ )); do
     echo "===== Subject $i / $((END_INDEX - 1)) ====="
 
     # Resume: skip if eval result already exists
-    if [[ -f "${EVAL_DIR}/eval_s${i}.json" ]]; then
-        echo "[skip] ${EVAL_DIR}/eval_s${i}.json already exists"
+    SUBJ_TAG="subject_$(printf '%04d' $i)"
+    if [[ -f "${EVAL_DIR}/${SUBJ_TAG}_eval.json" ]]; then
+        echo "[skip] ${EVAL_DIR}/${SUBJ_TAG}_eval.json already exists"
         continue
     fi
 
@@ -129,7 +130,7 @@ for (( i=START_INDEX; i<END_INDEX; i++ )); do
     if ! conda run -n "$CONDA_ENV" python export_for_serving.py export-biases \
         --model_file "$MODEL_FILE" \
         --subject_index "$i" --batch_size 3 \
-        --output "${BIAS_DIR}/s${i}.pt"; then
+        --output "${BIAS_DIR}/subject_$(printf '%04d' $i).pt"; then
         echo "[ERROR] export-biases failed for subject $i, skipping"
         continue
     fi
@@ -138,7 +139,7 @@ for (( i=START_INDEX; i<END_INDEX; i++ )); do
     echo "[step 2/4] Baking model for subject $i..."
     if ! conda run -n "$CONDA_ENV" python export_for_serving.py bake \
         --model_file "$MODEL_FILE" \
-        --biases "${BIAS_DIR}/s${i}.pt" \
+        --biases "${BIAS_DIR}/subject_$(printf '%04d' $i).pt" \
         --output_dir "$BAKED_DIR"; then
         echo "[ERROR] bake failed for subject $i, skipping"
         rm -rf "$BAKED_DIR"
@@ -164,8 +165,8 @@ for (( i=START_INDEX; i<END_INDEX; i++ )); do
     if ! conda run -n "$CONDA_ENV" python eval_served.py \
         --model_dir "$BAKED_DIR" \
         --api_base "http://localhost:${PORT}/v1" \
-        --output "${EVAL_DIR}/eval_s${i}.json" \
-        --raw_log "${RAW_LOG_DIR}/s${i}.log"; then
+        --output "${EVAL_DIR}/${SUBJ_TAG}_eval.json" \
+        --raw_log "${RAW_LOG_DIR}/${SUBJ_TAG}.log"; then
         echo "[ERROR] eval failed for subject $i"
         eval_ok=false
     fi
@@ -179,7 +180,7 @@ for (( i=START_INDEX; i<END_INDEX; i++ )); do
     echo "[cleanup] Removed $BAKED_DIR"
 
     if $eval_ok; then
-        echo "[done] Subject $i complete: ${EVAL_DIR}/eval_s${i}.json"
+        echo "[done] Subject $i complete: ${EVAL_DIR}/${SUBJ_TAG}_eval.json"
     fi
 done
 

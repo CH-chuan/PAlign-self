@@ -148,7 +148,7 @@ def main():
     if args.output:
         out = {
             "subject_index": subject_index,
-            "case": result["case"],
+            "case_id": result["case"],
             "per_trait_mae": mae_dict,
             "mae_sum": round(mae_sum, 4),
             "count": result["count"],

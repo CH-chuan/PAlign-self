@@ -36,7 +36,7 @@ from tqdm import tqdm
 
 from PAlign.pas import get_model
 from main import getItems, from_index_to_data, TEMPLATE, NEUTRAL_SYSTEM_PROMPT, generateAnswer, build_few_shot_prompt
-from baseline_utils import process_answers
+from baseline_utils import process_answers, save_subject_meta
 
 
 def run_export_biases(args):
@@ -95,13 +95,14 @@ def run_export_biases(args):
         deepcopy(head_wise_activations), labels, num_to_intervene=24
     )
 
+    best_result = None  # process_answers result for the best alpha (sweep only)
+
     if args.alpha is not None:
         # Fixed alpha mode — skip sweep
         model.reset_all()
         model.set_activate(interventions, args.alpha)
         best_alpha = args.alpha
         alpha_mode = 'fixed'
-        per_trait_mae = {}
         print(f"Using fixed alpha={best_alpha}")
     else:
         # Full PAS alpha sweep (paper's method)
@@ -134,8 +135,9 @@ def run_export_biases(args):
         best_idx = int(np.array(scores).argmin())
         best_alpha = alpha_values[best_idx]
         alpha_mode = 'sweep'
-        per_trait_mae = dict(result_cache[best_idx]['mean_ver_abs']['mean'])
+        best_result = result_cache[best_idx]
 
+        per_trait_mae = dict(best_result['mean_ver_abs']['mean'])
         print(f"Best alpha={best_alpha} (MAE sum={scores[best_idx]:.3f})")
         for trait, mae in sorted(per_trait_mae.items()):
             print(f"  {trait}: {mae:.3f}")
@@ -147,23 +149,20 @@ def run_export_biases(args):
     # Export biases
     bias_deltas = model.export_biases(args.output)
 
-    # Save metadata alongside
-    meta_path = args.output.rsplit('.', 1)[0] + '_meta.json'
-    meta = {
-        'model_file': args.model_file,
-        'subject_index': args.subject_index,
-        'case_id': sample['train'][0]['case'],
-        'alpha': best_alpha,
-        'alpha_mode': alpha_mode,
-        'num_to_intervene': 24,
-        'modified_heads': [[int(x) for x in h] for h in top_heads],
-        'num_modified_layers': len(bias_deltas),
-        'modified_layers': sorted(bias_deltas.keys()),
-    }
-    if per_trait_mae:
-        meta['per_trait_mae'] = {k: round(v, 4) for k, v in per_trait_mae.items()}
-    with open(meta_path, 'w') as f:
-        json.dump(meta, f, indent=2)
+    # Save metadata alongside (same naming convention as all other callers)
+    output_dir = os.path.dirname(args.output) or '.'
+    meta_path = os.path.join(output_dir, f'subject_{args.subject_index:04d}_meta.json')
+    save_subject_meta(
+        meta_path,
+        result=best_result,
+        subject_index=args.subject_index,
+        model_file=args.model_file,
+        method='few-shot-PAS',
+        alpha=best_alpha, alpha_mode=alpha_mode,
+        num_to_intervene=24,
+        modified_heads=[[int(x) for x in h] for h in top_heads],
+        modified_layers=sorted(bias_deltas.keys()),
+    )
     print(f"Metadata saved to {meta_path}")
 
 
@@ -210,8 +209,14 @@ def run_bake(args):
     model.save_pretrained(args.output_dir)
     tokenizer.save_pretrained(args.output_dir)
 
-    # Copy bias metadata if available
-    meta_path = args.biases.rsplit('.', 1)[0] + '_meta.json'
+    # Copy bias metadata if available — try standard naming first, fall back to old
+    bias_dir = os.path.dirname(args.biases) or '.'
+    bias_stem = os.path.basename(args.biases).rsplit('.', 1)[0]
+    # Standard: subject_XXXX_meta.json alongside subject_XXXX.pt
+    meta_path = os.path.join(bias_dir, bias_stem + '_meta.json')
+    if not os.path.exists(meta_path):
+        # Legacy: derived from full bias path (e.g. persona_biases_meta.json)
+        meta_path = args.biases.rsplit('.', 1)[0] + '_meta.json'
     if os.path.exists(meta_path):
         import shutil
         shutil.copy2(meta_path, os.path.join(args.output_dir, 'persona_meta.json'))
