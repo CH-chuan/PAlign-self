@@ -78,7 +78,7 @@ def run_ppo(model_name, num_subjects=0, output_dir=None, data_dir='PAPI'):
         results[idx] = result
 
         # Save checkpoint
-        save_subject_result(result, idx, output_dir)
+        save_subject_result(result, idx, output_dir, method='PPO')
 
         # Log progress
         score_sum = sum(k[1] for k in result['mean_ver_abs']['mean'])

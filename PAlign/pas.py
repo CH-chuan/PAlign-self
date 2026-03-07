@@ -209,11 +209,12 @@ def get_model(model_name='meta-llama/Llama-2-7b-chat-hf'):
                 probes, all_head_accs_np = train_probes(separated_activations,
                                                         separated_labels, num_layers=num_layers, num_heads=num_heads)
                 all_head_accs_np = all_head_accs_np.reshape(num_layers, num_heads,2)
-                all_head_accs_np = all_head_accs_np.mean(2) # so it is take the mean accuracy of training and validation sets...
-                top_accs = np.argsort(all_head_accs_np.reshape(num_heads * num_layers))[::-1][:num_to_intervene]
+                all_head_accs_full = all_head_accs_np  # (num_layers, num_heads, 2) — val_acc, train_acc
+                all_head_accs_mean = all_head_accs_np.mean(2) # mean accuracy of training and validation sets
+                top_accs = np.argsort(all_head_accs_mean.reshape(num_heads * num_layers))[::-1][:num_to_intervene]
                 top_heads = [flattened_idx_to_layer_head(idx, num_heads) for idx in top_accs]
 
-                return top_heads, probes
+                return top_heads, probes, all_head_accs_full
 
             def train_probes(separated_head_wise_activations, separated_labels,
                              num_layers, num_heads):
@@ -308,14 +309,14 @@ def get_model(model_name='meta-llama/Llama-2-7b-chat-hf'):
             tuning_activations = deepcopy(all_head_wise_activations)
             tuning_activations = rearrange(tuning_activations, 'b l (h d) -> b l h d', h=num_heads)
 
-            top_heads, probes = get_top_heads(head_wise_activations, labels, num_layers, num_heads, num_to_intervene)
+            top_heads, probes, all_head_accs = get_top_heads(head_wise_activations, labels, num_layers, num_heads, num_to_intervene)
 
             com_directions = get_com_directions(num_layers, num_heads, head_wise_activations,
                                                 labels)
 
             interventions = get_interventions_dict(top_heads, probes, tuning_activations, num_heads,com_directions)
 
-            return interventions
+            return interventions, top_heads, all_head_accs
 
         def preprocess_activate_dataset(self, dataset, system_prompt="You are a helpful, honest and concise assistant."):
             """
