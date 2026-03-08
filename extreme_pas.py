@@ -44,15 +44,20 @@ TRAITS = ['A', 'C', 'E', 'N', 'O']
 ALL_PROFILES = [f'{d}_{t}' for d in ('high', 'low') for t in TRAITS]
 
 
+def _profile_dir(output_dir, profile):
+    """Return the per-profile output directory."""
+    return os.path.join(output_dir, profile)
+
+
 def _save_answers(result, profile, output_dir, alpha=None):
-    """Save answers CSV with string-based profile name."""
-    results_dir = os.path.join(output_dir, 'subject_results')
-    os.makedirs(results_dir, exist_ok=True)
+    """Save answers CSV into the profile's directory."""
+    profile_dir = _profile_dir(output_dir, profile)
+    os.makedirs(profile_dir, exist_ok=True)
     rows = result.get('rows', [])
     if not rows:
         return
     suffix = f'_alpha{alpha}' if alpha is not None else ''
-    path = os.path.join(results_dir, f'extreme_{profile}_answers{suffix}.csv')
+    path = os.path.join(profile_dir, f'answers{suffix}.csv')
     fieldnames = ['question_idx', 'trait', 'key', 'ground_truth',
                   'raw_answer', 'parsed', 'score', 'error']
     with open(path, 'w', newline='') as f:
@@ -62,12 +67,12 @@ def _save_answers(result, profile, output_dir, alpha=None):
 
 
 def _save_probes(all_head_accs, top_heads, profile, output_dir):
-    """Save probes CSV with string-based profile name."""
-    results_dir = os.path.join(output_dir, 'subject_results')
-    os.makedirs(results_dir, exist_ok=True)
+    """Save probes CSV into the profile's directory."""
+    profile_dir = _profile_dir(output_dir, profile)
+    os.makedirs(profile_dir, exist_ok=True)
     num_layers, num_heads = all_head_accs.shape[:2]
     selected_set = set((l, h) for l, h in top_heads)
-    path = os.path.join(results_dir, f'extreme_{profile}_probes.csv')
+    path = os.path.join(profile_dir, 'probes.csv')
     with open(path, 'w', newline='') as f:
         writer = csv.writer(f)
         writer.writerow(['layer', 'head', 'train_acc', 'val_acc', 'selected'])
@@ -131,14 +136,12 @@ def process_extreme_pas(data_template, model, tokenizer, model_file, profiles,
         dict: profile_name -> result summary
     """
     raw_logger = setup_raw_logger(output_dir)
-    os.makedirs(os.path.join(output_dir, 'subject_results'), exist_ok=True)
     progress_path = os.path.join(output_dir, 'extreme_pas_progress.jsonl')
 
     # Check which profiles are already done
     done_profiles = set()
     for profile in profiles:
-        meta_path = os.path.join(output_dir, 'subject_results',
-                                 f'extreme_{profile}_meta.json')
+        meta_path = os.path.join(_profile_dir(output_dir, profile), 'meta.json')
         if os.path.exists(meta_path):
             done_profiles.add(profile)
     if done_profiles:
@@ -163,8 +166,7 @@ def process_extreme_pas(data_template, model, tokenizer, model_file, profiles,
     for profile in tqdm(profiles, desc='Profiles'):
         if profile in done_profiles:
             # Load existing result for summary
-            meta_path = os.path.join(output_dir, 'subject_results',
-                                     f'extreme_{profile}_meta.json')
+            meta_path = os.path.join(_profile_dir(output_dir, profile), 'meta.json')
             with open(meta_path, 'r') as f:
                 meta = json.load(f)
             summary[profile] = {
@@ -240,8 +242,7 @@ def process_extreme_pas(data_template, model, tokenizer, model_file, profiles,
         rs['alpha'] = alpha_values[best_idx]
 
         # Save meta and probes
-        meta_path = os.path.join(output_dir, 'subject_results',
-                                 f'extreme_{profile}_meta.json')
+        meta_path = os.path.join(_profile_dir(output_dir, profile), 'meta.json')
         method_name = 'Extreme-few-shot-PAS' if use_few_shot else 'Extreme-PAS'
         save_subject_meta(
             meta_path, result=rs, subject_index=profile,
