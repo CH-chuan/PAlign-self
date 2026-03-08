@@ -8,7 +8,7 @@ import numpy as np
 import torch
 
 from benchmarks.common.config import SCORES, TEMPLATE, SYSTEM_PROMPT
-from PAlign.pas import _chat_ids
+from PAlign.pas import _chat_ids, _get_assistant_marker, extract_assistant_response
 
 
 def setup_raw_logger(output_dir):
@@ -55,6 +55,7 @@ def generate_answers(model, tokenizer, test_items, model_name,
     """
     questions = [item["text"].lower() for item in test_items]
     answers = []
+    assistant_marker = _get_assistant_marker(tokenizer)
 
     model.eval()
     eos_token_ids = getattr(model, 'generation_config', None) and model.generation_config.eos_token_id
@@ -97,17 +98,7 @@ def generate_answers(model, tokenizer, test_items, model_name,
         output_text = tokenizer.batch_decode(outputs, skip_special_tokens=False)
 
         for text in output_text:
-            # Extract the first assistant response (forward index avoids hallucinated second turns)
-            if '<|end_header_id|>' in text:
-                answer = text.split("<|end_header_id|>")[3]
-            elif '<|im_start|>assistant' in text:
-                answer = text.split("<|im_start|>assistant")[1]
-            elif '<|channel|>final<|message|>' in text:
-                answer = text.split('<|channel|>final<|message|>')[-1]
-            elif '[/INST]' in text:
-                answer = text.split("[/INST]")[1]
-            else:
-                answer = text
+            answer = extract_assistant_response(text, assistant_marker)
             answers.append(answer)
             if raw_logger:
                 raw_logger.info(f"q={len(answers)-1} | {answer.strip()}")

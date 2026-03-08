@@ -38,6 +38,24 @@ def _chat_ids(tokenizer, messages, **kwargs):
     return out.input_ids
 
 
+def _get_assistant_marker(tokenizer):
+    """Derive the assistant response start marker from the tokenizer's chat template."""
+    msgs = [{"role": "user", "content": "x"}]
+    with_prompt = tokenizer.apply_chat_template(msgs, add_generation_prompt=True, tokenize=False)
+    without_prompt = tokenizer.apply_chat_template(msgs, tokenize=False)
+    marker = with_prompt[len(without_prompt):]
+    if not marker:
+        raise ValueError("Could not derive assistant marker from chat template")
+    return marker
+
+
+def extract_assistant_response(text, assistant_marker):
+    """Extract the assistant's response from full decoded text."""
+    if assistant_marker in text:
+        return text.split(assistant_marker)[-1].lstrip()
+    return text.lstrip()
+
+
 class _ModuleInputCapture:
     """Capture inputs to named submodules via forward pre-hooks."""
 

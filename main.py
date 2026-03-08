@@ -10,7 +10,7 @@ from tqdm import tqdm, trange
 from transformers import AutoTokenizer, AutoModelForCausalLM
 import re
 from pprint import pprint
-from PAlign.pas import get_model, _chat_ids
+from PAlign.pas import get_model, _chat_ids, _get_assistant_marker, extract_assistant_response
 from copy import deepcopy
 from baseline_utils import (process_answers, process_few_shot, calc_mean_and_var,
                             process_personality_prompt, save_subject_meta, save_subject_answers,
@@ -98,6 +98,7 @@ def generateAnswer(tokenizer, model, dataset, template, scores=SCORES, system_pr
     """
     questions = [item["text"].lower() for item in dataset]
     answers = []
+    assistant_marker = _get_assistant_marker(tokenizer)
 
     for batch in range(0, len(questions), batch_size):
         with torch.no_grad():
@@ -108,16 +109,7 @@ def generateAnswer(tokenizer, model, dataset, template, scores=SCORES, system_pr
             )
             output_text = tokenizer.batch_decode(outputs)
             for text in output_text:
-                if '<|end_header_id|>' in text:
-                    ans = text.split("<|end_header_id|>")[3]
-                elif '<|im_start|>assistant' in text:
-                    ans = text.split("<|im_start|>assistant")[-1].lstrip('\n')
-                elif '<|channel|>final<|message|>' in text:
-                    ans = text.split('<|channel|>final<|message|>')[-1]
-                elif '[/INST]' in text:
-                    ans = text.split("[/INST]")[-1]
-                else:
-                    ans = text
+                ans = extract_assistant_response(text, assistant_marker)
                 if raw_logger:
                     raw_logger.info(f"q={len(answers)} | {ans.strip()}")
                 answers.append(ans)
