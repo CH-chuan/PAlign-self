@@ -201,7 +201,7 @@ def setup_raw_logger(output_dir='./reproduction'):
 
 
 def process_pas(data, model, tokenizer, model_file, output_dir='./reproduction',
-                use_few_shot=False, batch_size=16):
+                use_few_shot=False, batch_size=16, direction_method='com'):
     """
     Process data using Persona Activation Steering (PAS) method.
 
@@ -269,7 +269,7 @@ def process_pas(data, model, tokenizer, model_file, output_dir='./reproduction',
                     personal_number += 2 # this analogous to prior index on adding both pos and neg pairs for each item
 
         # Get activations for intervention
-        activate, top_heads, all_head_accs = model.get_activations(deepcopy(head_wise_activations), labels, num_to_intervene=24)
+        activate, top_heads, all_head_accs = model.get_activations(deepcopy(head_wise_activations), labels, num_to_intervene=24, direction_method=direction_method)
 
         # Test different activation levels
         alpha_values = [0, 1, 2, 4, 6, 8]
@@ -308,6 +308,8 @@ def process_pas(data, model, tokenizer, model_file, output_dir='./reproduction',
 
         # Save per-subject meta, answers, and probes
         method_name = 'few-shot-PAS' if use_few_shot else 'PAS'
+        if direction_method == 'probe':
+            method_name += '-probe'
         meta_path = os.path.join(output_dir, 'subject_results', f'subject_{index:04d}_meta.json')
         save_subject_meta(meta_path, result=rs, subject_index=index,
                           model_file=model_file,
@@ -396,7 +398,7 @@ def print_and_save_results(results, mode, model_file, dataset_set, output_dir='.
     print(f"Results saved to {log_filename}")
 
 
-def main(mode=None, model_file='', model=None, tokenizer=None, dataset_set='OOD', num_subjects=0, output_dir='./reproduction', batch_size=16):
+def main(mode=None, model_file='', model=None, tokenizer=None, dataset_set='OOD', num_subjects=0, output_dir='./reproduction', batch_size=16, direction_method='com'):
     """
     Main function to run personality assessment.
     """
@@ -433,10 +435,16 @@ def main(mode=None, model_file='', model=None, tokenizer=None, dataset_set='OOD'
     elif mode in ('PAS', 'few-shot-PAS'):
         # Process data using PAS (Personality Assessment System)
         results = process_pas(data, model, tokenizer, model_file, output_dir=output_dir,
-                             use_few_shot=(mode == 'few-shot-PAS'), batch_size=batch_size)
+                             use_few_shot=(mode == 'few-shot-PAS'), batch_size=batch_size,
+                             direction_method=direction_method)
+
+    # Update mode name for output file if using probe directions
+    output_mode = mode
+    if direction_method == 'probe' and mode in ('PAS', 'few-shot-PAS'):
+        output_mode = mode + '-probe'
 
     # Print and save final results
-    print_and_save_results(results, mode, model_file, dataset_set, output_dir=output_dir)
+    print_and_save_results(results, output_mode, model_file, dataset_set, output_dir=output_dir)
 
 
 if __name__ == "__main__":
@@ -448,6 +456,8 @@ if __name__ == "__main__":
     parser.add_argument("--num_subjects", type=int, default=0, help="Number of subjects to process (0=all)")
     parser.add_argument("--output_dir", default='./reproduction', help="Output directory for results")
     parser.add_argument("--batch_size", type=int, default=16, help="Inference batch size (default 16 for A100-80GB)")
+    parser.add_argument("--direction_method", default='com', choices=['com', 'probe'],
+                        help="Intervention direction method: 'com' (center-of-mass) or 'probe' (paper-faithful probe coefficients)")
     args = parser.parse_args()
 
     model_file = args.model_file
@@ -455,6 +465,7 @@ if __name__ == "__main__":
     num_subjects = args.num_subjects
     output_dir = args.output_dir
     batch_size = args.batch_size
+    direction_method = args.direction_method
 
     model, tokenizer = get_model(model_file)
     if tokenizer.pad_token is None:
@@ -464,4 +475,4 @@ if __name__ == "__main__":
     for mode in modes:
         main(mode=mode, model_file=model_file, model=model, tokenizer=tokenizer,
              dataset_set='OOD', num_subjects=num_subjects, output_dir=output_dir,
-             batch_size=batch_size)
+             batch_size=batch_size, direction_method=direction_method)

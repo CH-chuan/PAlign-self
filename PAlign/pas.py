@@ -213,7 +213,7 @@ def get_model(model_name='meta-llama/Llama-2-7b-chat-hf'):
             for i, layer in enumerate(self.model.model.layers):
                 self.model.model.layers[i].self_attn.o_proj.bias = self.bias_cache[i]
 
-        def get_activations(self, all_head_wise_activations, labels, num_to_intervene=48, val_ratio=0.4):
+        def get_activations(self, all_head_wise_activations, labels, num_to_intervene=48, val_ratio=0.4, direction_method='com'):
             """
             Gets the activations for the model based on the given head-wise activations and labels.
 
@@ -329,10 +329,13 @@ def get_model(model_name='meta-llama/Llama-2-7b-chat-hf'):
 
             top_heads, probes, all_head_accs = get_top_heads(head_wise_activations, labels, num_layers, num_heads, num_to_intervene)
 
-            com_directions = get_com_directions(num_layers, num_heads, head_wise_activations,
-                                                labels)
+            if direction_method == 'com':
+                com_directions = get_com_directions(num_layers, num_heads, head_wise_activations,
+                                                    labels)
+            else:
+                com_directions = None  # use probe .coef_ as intervention direction
 
-            interventions = get_interventions_dict(top_heads, probes, tuning_activations, num_heads,com_directions)
+            interventions = get_interventions_dict(top_heads, probes, tuning_activations, num_heads, com_directions)
 
             return interventions, top_heads, all_head_accs
 
