@@ -1,0 +1,94 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{xcolor}
+\usepackage{colortbl}
+
+\definecolor{lightgray}{gray}{0.92}
+
+\title{IPIP-NEO Item EDA by Trait and Facet}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+300 items total: 120 train (IPIP-NEO short form) / 180 test. Each facet has 10 items (4 train / 6 test).
+
+\begin{table}[h]
+\centering
+\caption{Item distribution and sign balance per facet.}
+\begin{tabular}{llcccc}
+\toprule
+Trait & Facet & Train & Test & Train $+/-$ & Test $+/-$ \\
+\midrule
+\rowcolor{lightgray}
+\multirow{7}{*}{\textbf{Agreeableness (A)}} & \textbf{Total} & \textbf{24} & \textbf{36} & \textbf{+7 / --17} & \textbf{+17 / --19} \\
+ & A1: Trust            & 4 & 6 & +3 / --1 & +3 / --3 \\
+ & A2: Morality         & 4 & 6 & +0 / --4 & +2 / --4 \\
+ & A3: Altruism         & 4 & 6 & +2 / --2 & +3 / --3 \\
+ & A4: Cooperation      & 4 & 6 & +0 / --4 & +3 / --3 \\
+ & A5: Modesty          & 4 & 6 & +0 / --4 & +4 / --2 \\
+ & A6: Sympathy         & 4 & 6 & +2 / --2 & +2 / --4 \\
+\midrule
+\rowcolor{lightgray}
+\multirow{7}{*}{\textbf{Conscientiousness (C)}} & \textbf{Total} & \textbf{24} & \textbf{36} & \textbf{+11 / --13} & \textbf{+20 / --16} \\
+ & C1: Self-Efficacy         & 4 & 6 & +4 / --0 & +2 / --4 \\
+ & C2: Orderliness           & 4 & 6 & +1 / --3 & +4 / --2 \\
+ & C3: Dutifulness           & 4 & 6 & +2 / --2 & +3 / --3 \\
+ & C4: Achievement-Striving  & 4 & 6 & +2 / --2 & +5 / --1 \\
+ & C5: Self-Discipline       & 4 & 6 & +2 / --2 & +3 / --3 \\
+ & C6: Cautiousness          & 4 & 6 & +0 / --4 & +3 / --3 \\
+\midrule
+\rowcolor{lightgray}
+\multirow{7}{*}{\textbf{Extraversion (E)}} & \textbf{Total} & \textbf{24} & \textbf{36} & \textbf{+18 / --6} & \textbf{+18 / --18} \\
+ & E1: Friendliness       & 4 & 6 & +2 / --2 & +3 / --3 \\
+ & E2: Gregariousness     & 4 & 6 & +2 / --2 & +3 / --3 \\
+ & E3: Assertiveness      & 4 & 6 & +3 / --1 & +2 / --4 \\
+ & E4: Activity Level     & 4 & 6 & +3 / --1 & +2 / --4 \\
+ & E5: Excitement-Seeking & 4 & 6 & +4 / --0 & +4 / --2 \\
+ & E6: Cheerfulness       & 4 & 6 & +4 / --0 & +4 / --2 \\
+\midrule
+\rowcolor{lightgray}
+\multirow{7}{*}{\textbf{Neuroticism (N)}} & \textbf{Total} & \textbf{24} & \textbf{36} & \textbf{+17 / --7} & \textbf{+16 / --20} \\
+ & N1: Anxiety            & 4 & 6 & +4 / --0 & +1 / --5 \\
+ & N2: Anger              & 4 & 6 & +3 / --1 & +2 / --4 \\
+ & N3: Depression         & 4 & 6 & +3 / --1 & +4 / --2 \\
+ & N4: Self-Consciousness & 4 & 6 & +3 / --1 & +3 / --3 \\
+ & N5: Immoderation       & 4 & 6 & +1 / --3 & +4 / --2 \\
+ & N6: Vulnerability      & 4 & 6 & +3 / --1 & +2 / --4 \\
+\midrule
+\rowcolor{lightgray}
+\multirow{7}{*}{\textbf{Openness (O)}} & \textbf{Total} & \textbf{24} & \textbf{36} & \textbf{+12 / --12} & \textbf{+16 / --20} \\
+ & O1: Imagination        & 4 & 6 & +4 / --0 & +2 / --4 \\
+ & O2: Artistic Interests & 4 & 6 & +2 / --2 & +3 / --3 \\
+ & O3: Emotionality       & 4 & 6 & +2 / --2 & +3 / --3 \\
+ & O4: Adventurousness    & 4 & 6 & +1 / --3 & +3 / --3 \\
+ & O5: Intellect          & 4 & 6 & +1 / --3 & +4 / --2 \\
+ & O6: Liberalism         & 4 & 6 & +2 / --2 & +1 / --5 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[h]
+\centering
+\caption{Facets with fully one-sided training items (9 of 30).}
+\begin{tabular}{lcc}
+\toprule
+Facet & Train Sign & Direction \\
+\midrule
+A2: Morality         & +0 / --4 & All reverse-keyed \\
+A4: Cooperation      & +0 / --4 & All reverse-keyed \\
+A5: Modesty          & +0 / --4 & All reverse-keyed \\
+C1: Self-Efficacy    & +4 / --0 & All forward-keyed \\
+C6: Cautiousness     & +0 / --4 & All reverse-keyed \\
+E5: Excitement-Seeking & +4 / --0 & All forward-keyed \\
+E6: Cheerfulness     & +4 / --0 & All forward-keyed \\
+N1: Anxiety          & +4 / --0 & All forward-keyed \\
+O1: Imagination      & +4 / --0 & All forward-keyed \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\end{document}
